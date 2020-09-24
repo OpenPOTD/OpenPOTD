@@ -1,0 +1,4 @@
+token: token.txt
+blacklist: blacklist.txt
+prefix: '%'
+presence: "OpenPOTD: DM to submit"
