@@ -1,5 +1,13 @@
 token: token.txt
 blacklist: blacklist.txt
 prefix: '%'
+
+# Discord presence
 presence: "Use %help. "
+
+# Number of points someone would receive if they are the only one to solve a problem
 base_points: 1000
+
+# Cogs that need to be loaded with the bot
+cogs:
+  - cogs.management
