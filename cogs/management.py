@@ -1,5 +1,8 @@
-from discord.ext import commands
+import io
+import sqlite3
 from datetime import date
+
+from discord.ext import commands
 
 
 class Management(commands.Cog):
@@ -24,6 +27,20 @@ class Management(commands.Cog):
                        (prob_date_parsed, season, statement, answer))
         self.bot.db.commit()
         await ctx.send('Added problem. ')
+
+    @commands.command()
+    async def linkimg(self, ctx, potd: int):
+        if len(ctx.message.attachments) < 1:
+            await ctx.send("No attached file. ")
+            return
+        else:
+            save_path = io.BytesIO()
+            await ctx.message.attachments[0].save(save_path)
+            cursor = self.bot.db.cursor()
+            cursor.execute('''INSERT INTO images (potd_id, image) VALUES (?, ?)''',
+                           (potd, sqlite3.Binary(save_path.getbuffer())))
+            self.bot.db.commit()
+
 
 def setup(bot: commands.Bot):
     bot.add_cog(Management(bot))
