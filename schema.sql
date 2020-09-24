@@ -53,5 +53,14 @@ CREATE TABLE IF NOT EXISTS "problems" (
 	"difficulty"	INTEGER,
 	"weighted_solves"	INTEGER NOT NULL DEFAULT 0,
 	"base_points"	INTEGER NOT NULL DEFAULT 0,
+	"answer"    INTEGER NOT NULL, 
 	FOREIGN KEY("season") REFERENCES "seasons"("id")
+);
+CREATE TABLE IF NOT EXISTS "ratings" (
+	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"userid"	INTEGER,
+	"problemid"	INTEGER,
+	"rating"	INTEGER,
+	FOREIGN KEY("userid") REFERENCES "users"("discord_id"),
+	FOREIGN KEY("problemid") REFERENCES "problems"("id")
 );
