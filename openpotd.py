@@ -9,6 +9,8 @@ import schedule
 from discord.ext import commands
 from ruamel import yaml
 
+import sqlite3
+
 cfgfile = open("config/config.yml")
 config = yaml.safe_load(cfgfile)
 
@@ -17,6 +19,7 @@ class OpenPOTD(commands.Bot):
     def __init__(self, prefix):
         super().__init__(prefix)
         self.config = config
+        self.db = sqlite3.connect('data/data.db')
         logging.basicConfig(level=logging.INFO, format='[%(name)s %(levelname)s] %(message)s')
         self.logger = logging.getLogger('bot')
         try:
