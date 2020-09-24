@@ -2,7 +2,7 @@
 
 # Creating config files
 mkdir config
-cp default_config.yml config/default_config.yml
+cp default_config.yml config/config.yml
 touch config/token.txt  # Fill in the provided token yourself
 
 # Creating database
