@@ -40,6 +40,7 @@ class Management(commands.Cog):
             cursor.execute('''INSERT INTO images (potd_id, image) VALUES (?, ?)''',
                            (potd, sqlite3.Binary(save_path.getbuffer())))
             self.bot.db.commit()
+            save_path.close()
 
 
 def setup(bot: commands.Bot):
