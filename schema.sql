@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS "solves" (
 	FOREIGN KEY("problem_id") REFERENCES "problems"("id"),
 	FOREIGN KEY("user") REFERENCES "users"("discord_id")
 );
+CREATE TABLE sqlite_sequence(name,seq);
 CREATE TABLE IF NOT EXISTS "images" (
 	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 	"potd_id"	INTEGER,
@@ -38,12 +39,13 @@ CREATE TABLE IF NOT EXISTS "rankings" (
 	FOREIGN KEY("user_id") REFERENCES "users"("discord_id"),
 	FOREIGN KEY("season_id") REFERENCES "seasons"("id")
 );
-CREATE TABLE IF NOT EXISTS "seasons" (
+CREATE TABLE IF NOT EXISTS "ratings" (
 	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-	"running"	BOOLEAN NOT NULL,
-	"latest_potd"	INTEGER,
-	"name"	TEXT,
-	FOREIGN KEY("latest_potd") REFERENCES "problems"("id")
+	"userid"	INTEGER,
+	"problemid"	INTEGER,
+	"rating"	INTEGER,
+	FOREIGN KEY("userid") REFERENCES "users"("discord_id"),
+	FOREIGN KEY("problemid") REFERENCES "problems"("id")
 );
 CREATE TABLE IF NOT EXISTS "problems" (
 	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -53,14 +55,22 @@ CREATE TABLE IF NOT EXISTS "problems" (
 	"difficulty"	INTEGER,
 	"weighted_solves"	INTEGER NOT NULL DEFAULT 0,
 	"base_points"	INTEGER NOT NULL DEFAULT 0,
-	"answer"    INTEGER NOT NULL, 
+	"answer"	INTEGER NOT NULL,
+	"public"	BOOLEAN,
 	FOREIGN KEY("season") REFERENCES "seasons"("id")
 );
-CREATE TABLE IF NOT EXISTS "ratings" (
+CREATE TABLE IF NOT EXISTS "registrations" (
 	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-	"userid"	INTEGER,
-	"problemid"	INTEGER,
-	"rating"	INTEGER,
-	FOREIGN KEY("userid") REFERENCES "users"("discord_id"),
-	FOREIGN KEY("problemid") REFERENCES "problems"("id")
+	"user_id"	INTEGER NOT NULL,
+	"season_id"	INTEGER NOT NULL,
+	FOREIGN KEY("user_id") REFERENCES "users"("discord_id"),
+	FOREIGN KEY("season_id") REFERENCES "seasons"("id")
+);
+CREATE TABLE IF NOT EXISTS "seasons" (
+	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"running"	BOOLEAN NOT NULL,
+	"latest_potd"	INTEGER,
+	"name"	TEXT,
+	"server_id"	INTEGER,
+	FOREIGN KEY("latest_potd") REFERENCES "problems"("id")
 );
