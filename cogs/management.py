@@ -2,6 +2,7 @@ import io
 import sqlite3
 from datetime import date
 
+import discord
 from discord.ext import commands
 
 
@@ -42,37 +43,38 @@ class Management(commands.Cog):
             self.bot.db.commit()
             save_path.close()
 
-
     @commands.command()
     async def showpotd(self, ctx, potd):
         cursor = self.bot.db.cursor()
+        potd_date, potd_id = None, None
         # Find the right potd for the user
         if potd.isdecimal():  # User passed in an id
-            id = potd
-        else:   # User passed in a date, we expect ISO format
+            potd_id = potd
+            cursor.execute('''SELECT "date" from problems WHERE problems.id = ? AND public = ?''', (potd_id, True))
             try:
-                potd_date = date.fromisoformat(potd)
-            except ValueError:
-                await ctx.send('Incorrect date format. Please enter your date in ISO format (like 2020-09-01 '
-                               'for the first of September).')
-                return
-            cursor.execute('''SELECT id from problems WHERE date = "?" AND public = "?"''', (potd_date, True))
+                potd_date = cursor.fetchall()[0][0]
+            except IndexError:
+                await ctx.send('No such potd. ')
+        else:  # User passed in a date
+            potd_date = potd
+            cursor.execute('''SELECT id from problems WHERE date = ? AND public = ?''', (potd_date, True))
             result = cursor.fetchall()
             if len(result) == 0:
                 await ctx.send('No such POTD found. ')
                 return
             else:
-                id = result[0][0]
+                potd_id = result[0][0]
 
         # Display the potd to the user
-        cursor.execute('''SELECT image FROM images WHERE potd_id = ?''', (id, ))
+        cursor.execute('''SELECT image FROM images WHERE potd_id = ?''', (potd_id,))
         images = cursor.fetchall()
         if len(images) == 0:
-            await ctx.send(f'POTD {id} has no picture attached. ')
+            await ctx.send(f'POTD {potd_id} of {potd_date} has no picture attached. ')
         else:
-            await ctx.send(f'POTD {id}', file=io.BytesIO(images[0][0]))
+            await ctx.send(f'POTD {potd_id} of {potd_date}', file=discord.File(io.BytesIO(images[0][0]),
+                                                                               filename=f'POTD-{potd_id}-0.png'))
             for i in range(1, len(images)):
-                await ctx.send(file=io.BytesIO(images[i][0]))
+                await ctx.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
 
 
 def setup(bot: commands.Bot):
