@@ -45,6 +45,14 @@ CREATE TABLE IF NOT EXISTS "seasons" (
 	"name"	TEXT,
 	FOREIGN KEY("latest_potd") REFERENCES "problems"("id")
 );
+CREATE TABLE IF NOT EXISTS "ratings" (
+	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"userid"	INTEGER,
+	"problemid"	INTEGER,
+	"rating"	INTEGER,
+	FOREIGN KEY("userid") REFERENCES "users"("discord_id"),
+	FOREIGN KEY("problemid") REFERENCES "problems"("id")
+);
 CREATE TABLE IF NOT EXISTS "problems" (
 	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 	"date"	DATE NOT NULL,
@@ -53,14 +61,7 @@ CREATE TABLE IF NOT EXISTS "problems" (
 	"difficulty"	INTEGER,
 	"weighted_solves"	INTEGER NOT NULL DEFAULT 0,
 	"base_points"	INTEGER NOT NULL DEFAULT 0,
-	"answer"    INTEGER NOT NULL, 
+	"answer"	INTEGER NOT NULL,
+	"public"	BOOLEAN,
 	FOREIGN KEY("season") REFERENCES "seasons"("id")
-);
-CREATE TABLE IF NOT EXISTS "ratings" (
-	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-	"userid"	INTEGER,
-	"problemid"	INTEGER,
-	"rating"	INTEGER,
-	FOREIGN KEY("userid") REFERENCES "users"("discord_id"),
-	FOREIGN KEY("problemid") REFERENCES "problems"("id")
 );
