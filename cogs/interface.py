@@ -6,6 +6,7 @@ class Interface(commands.Cog):
         self.bot = bot
 
     @commands.command()
+    @commands.check(lambda ctx: False)      # This command is disabled since it only applies for multi-server config
     async def register(self, ctx, *, season):
         cursor = self.bot.db.cursor()
         cursor.execute('''SELECT id from seasons where name = ? and server_id = ?''', (season, ctx.guild.id))
