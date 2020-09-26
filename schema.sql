@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS "attempts" (
 	FOREIGN KEY("potd_id") REFERENCES "problems"("id")
 );
 CREATE TABLE IF NOT EXISTS "users" (
-	"discord_id"	INTEGER NOT NULL,
+	"discord_id"	INTEGER NOT NULL UNIQUE,
 	"nickname"	TEXT,
 	PRIMARY KEY("discord_id")
 );

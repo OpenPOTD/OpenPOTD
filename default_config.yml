@@ -11,3 +11,4 @@ base_points: 1000
 # Cogs that need to be loaded with the bot
 cogs:
   - cogs.management
+  - cogs.interface
