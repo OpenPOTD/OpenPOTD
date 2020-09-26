@@ -1,11 +1,8 @@
-CREATE TABLE IF NOT EXISTS "solves" (
-	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-	"num_attempts"	INTEGER,	
-	FOREIGN KEY("user") REFERENCES "users"("discord_id"),
-	FOREIGN KEY("problem_id") REFERENCES "problems"("id"),
-	FOREIGN KEY("final_attempt") REFERENCES "attempts"("id")
+CREATE TABLE IF NOT EXISTS "users" (
+	"discord_id"	INTEGER NOT NULL UNIQUE,
+	"nickname"	TEXT,
+	PRIMARY KEY("discord_id")
 );
-CREATE TABLE sqlite_sequence(name,seq);
 CREATE TABLE IF NOT EXISTS "images" (
 	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 	"potd_id"	INTEGER,
@@ -22,11 +19,15 @@ CREATE TABLE IF NOT EXISTS "attempts" (
 	FOREIGN KEY("user_id") REFERENCES "users"("discord_id"),
 	FOREIGN KEY("potd_id") REFERENCES "problems"("id")
 );
-CREATE TABLE IF NOT EXISTS "users" (
-	"discord_id"	INTEGER NOT NULL UNIQUE,
-	"nickname"	TEXT,
-	PRIMARY KEY("discord_id")
+CREATE TABLE IF NOT EXISTS "solves" (
+	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"user"  INTEGER,
+	"problem_id"    INTEGER,
+	"num_attempts"	INTEGER,	
+	FOREIGN KEY("user") REFERENCES "users"("discord_id"),
+	FOREIGN KEY("problem_id") REFERENCES "problems"("id")
 );
+
 CREATE TABLE IF NOT EXISTS "rankings" (
 	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 	"season_id"	INTEGER,
@@ -56,18 +57,10 @@ CREATE TABLE IF NOT EXISTS "problems" (
 	"public"	BOOLEAN,
 	FOREIGN KEY("season") REFERENCES "seasons"("id")
 );
-CREATE TABLE IF NOT EXISTS "registrations" (
-	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-	"user_id"	INTEGER NOT NULL,
-	"season_id"	INTEGER NOT NULL,
-	FOREIGN KEY("user_id") REFERENCES "users"("discord_id"),
-	FOREIGN KEY("season_id") REFERENCES "seasons"("id")
-);
 CREATE TABLE IF NOT EXISTS "seasons" (
 	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 	"running"	BOOLEAN NOT NULL,
 	"latest_potd"	INTEGER,
 	"name"	TEXT,
-	"server_id"	INTEGER,
 	FOREIGN KEY("latest_potd") REFERENCES "problems"("id")
 );
