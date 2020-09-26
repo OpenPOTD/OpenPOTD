@@ -1,12 +1,9 @@
 CREATE TABLE IF NOT EXISTS "solves" (
 	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-	"user"	INTEGER,
-	"problem_id"	INTEGER,
-	"final_attempt"	INTEGER,
-	"num_attempts"	INTEGER,
-	FOREIGN KEY("final_attempt") REFERENCES "attempts"("id"),
+	"num_attempts"	INTEGER,	
+	FOREIGN KEY("user") REFERENCES "users"("discord_id"),
 	FOREIGN KEY("problem_id") REFERENCES "problems"("id"),
-	FOREIGN KEY("user") REFERENCES "users"("discord_id")
+	FOREIGN KEY("final_attempt") REFERENCES "attempts"("id")
 );
 CREATE TABLE sqlite_sequence(name,seq);
 CREATE TABLE IF NOT EXISTS "images" (
