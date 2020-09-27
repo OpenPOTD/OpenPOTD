@@ -1,11 +1,12 @@
 import io
+import re
 import sqlite3
 from datetime import date
 
 import discord
 from discord.ext import commands
 from discord.ext import flags
-import re
+
 
 class Management(commands.Cog):
 
@@ -100,6 +101,26 @@ class Management(commands.Cog):
                 cursor.execute(f'UPDATE problems SET {param} = ? WHERE id = ?', (flags[param], potd))
         self.bot.db.commit()
         await ctx.send('Updated potd. ')
+
+    @commands.command()
+    async def info(self, ctx, potd):
+        cursor = self.bot.db.cursor()
+        if potd.isdecimal():
+            cursor.execute('SELECT * FROM problems WHERE id = ?', (int(potd),))
+        else:
+            cursor.execute('SELECT * FROM problems WHERE date = ?', (potd,))
+
+        result = cursor.fetchall()
+        if len(result) == 0:
+            await ctx.send('No such potd. ')
+            return
+
+        columns = ['id', 'date', 'season', 'statement',
+                   'difficulty', 'weighted_solves', 'base_points', 'answer', 'public']
+        embed = discord.Embed(title=f'POTD {result[0][0]}')
+        for i in range(len(columns)):
+            embed.add_field(name=columns[i], value=result[0][i], inline=False)
+        await ctx.send(embed=embed)
 
 
 def setup(bot: commands.Bot):
