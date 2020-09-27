@@ -4,7 +4,8 @@ from datetime import date
 
 import discord
 from discord.ext import commands
-
+from discord.ext import flags
+import re
 
 class Management(commands.Cog):
 
@@ -45,19 +46,24 @@ class Management(commands.Cog):
 
     @commands.command()
     async def showpotd(self, ctx, potd):
+        """Note: this is the admin version of the command so all problems are visible. """
+
         cursor = self.bot.db.cursor()
         potd_date, potd_id = None, None
         # Find the right potd for the user
         if potd.isdecimal():  # User passed in an id
             potd_id = potd
-            cursor.execute('''SELECT "date" from problems WHERE problems.id = ? AND public = ?''', (potd_id, True))
+            cursor.execute('''SELECT "date" from problems WHERE problems.id = ?''', (potd_id,))
+            result = cursor.fetchall()
             try:
-                potd_date = cursor.fetchall()[0][0]
+                potd_date = result[0][0]
             except IndexError:
                 await ctx.send('No such potd. ')
+                return
+
         else:  # User passed in a date
             potd_date = potd
-            cursor.execute('''SELECT id from problems WHERE date = ? AND public = ?''', (potd_date, True))
+            cursor.execute('''SELECT id from problems WHERE date = ?''', (potd_date,))
             result = cursor.fetchall()
             if len(result) == 0:
                 await ctx.send('No such POTD found. ')
@@ -75,6 +81,25 @@ class Management(commands.Cog):
                                                                                filename=f'POTD-{potd_id}-0.png'))
             for i in range(1, len(images)):
                 await ctx.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
+
+    @flags.add_flag('--date')
+    @flags.add_flag('--season', type=int)
+    @flags.add_flag('--statement')
+    @flags.add_flag('--difficulty', type=int)
+    @flags.add_flag('--answer', type=int)
+    @flags.add_flag('--public', type=bool)
+    @flags.command()
+    async def update(self, ctx, potd: int, **flags):
+        cursor = self.bot.db.cursor()
+        if not flags['date'] is None and not bool(re.match(r'\d\d\d\d-\d\d-\d\d', flags['date'])):
+            await ctx.send('Invalid date (specify yyyy-mm-dd)')
+            return
+
+        for param in flags:
+            if flags[param] is not None:
+                cursor.execute(f'UPDATE problems SET {param} = ? WHERE id = ?', (flags[param], potd))
+        self.bot.db.commit()
+        await ctx.send('Updated potd. ')
 
 
 def setup(bot: commands.Bot):
