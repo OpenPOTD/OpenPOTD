@@ -8,6 +8,12 @@ presence: "Use %help. "
 # Number of points someone would receive if they are the only one to solve a problem
 base_points: 1000
 
+# Scheduled posting time of POTDs
+posting_time:
+
+# Channel to post the POTDs in by default.
+potd_channel:
+
 # Cogs that need to be loaded with the bot
 cogs:
   - cogs.management

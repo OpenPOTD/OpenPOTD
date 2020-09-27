@@ -4,14 +4,53 @@ import sqlite3
 from datetime import date
 
 import discord
+import schedule
 from discord.ext import commands
 from discord.ext import flags
+
+import openpotd
 
 
 class Management(commands.Cog):
 
-    def __init__(self, bot):
+    def __init__(self, bot: openpotd.OpenPOTD):
         self.bot = bot
+        schedule.every().day.at(self.bot.config['posting_time']) \
+            .do(self.bot.loop.create_task, self.advance_potd())
+
+    async def advance_potd(self):
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT problems.id from (seasons left join problems on seasons.running = True '
+                       'and seasons.id = problems.season and problems.date = ? )', (str(date.today()),))
+        result = cursor.fetchall()
+        potd_channel = self.bot.get_channel(self.bot.config['potd_channel'])
+        if len(result) == 0:
+            await potd_channel.send('Sorry! We are running late on the potd today. ')
+            return
+
+        # Send the potd
+        potd_id = result[0][0]
+        cursor.execute('SELECT images.image from images where images.potd_id = ?', (potd_id,))
+        images = cursor.fetchall()
+        if len(images) == 0:
+            await potd_channel.send(f'POTD {potd_id} of {str(date.today())} has no picture attached. ')
+        else:
+            await potd_channel.send(f'POTD {potd_id} of {str(date.today())}',
+                                    file=discord.File(io.BytesIO(images[0][0]),
+                                                      filename=f'POTD-{potd_id}-0.png'))
+            for i in range(1, len(images)):
+                await potd_channel.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
+
+        # Advance the season
+        cursor.execute('SELECT season FROM problems WHERE id = ?', (potd_id,))
+        season_id = cursor.fetchall()[0][0]
+        cursor.execute('UPDATE seasons SET latest_potd = ? WHERE id = ?', (potd_id, season_id))
+
+        # Make the new potd publically available
+        cursor.execute('UPDATE problems SET public = ? WHERE id = ?', (True, potd_id))
+
+        # Commit db
+        self.bot.db.commit()
 
     @commands.command()
     async def newseason(self, ctx, *, name):
