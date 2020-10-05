@@ -2,6 +2,7 @@ import io
 import re
 import sqlite3
 from datetime import date
+from datetime import datetime
 
 import discord
 import schedule
@@ -15,16 +16,19 @@ class Management(commands.Cog):
 
     def __init__(self, bot: openpotd.OpenPOTD):
         self.bot = bot
-        schedule.every().day.at(self.bot.config['posting_time']) \
-            .do(self.bot.loop.create_task, self.advance_potd())
+        schedule.every().day.at('17:17').do(self.schedule_potd)
+
+    def schedule_potd(self):
+        self.bot.loop.create_task(self.advance_potd())
 
     async def advance_potd(self):
+        print(f'Advancing POTD at {datetime.now()}')
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT problems.id from (seasons left join problems on seasons.running = True '
                        'and seasons.id = problems.season and problems.date = ? )', (str(date.today()),))
         result = cursor.fetchall()
         potd_channel = self.bot.get_channel(self.bot.config['potd_channel'])
-        if len(result) == 0:
+        if len(result) == 0 or result[0][0] is None:
             await potd_channel.send('Sorry! We are running late on the potd today. ')
             return
 
@@ -162,5 +166,5 @@ class Management(commands.Cog):
         await ctx.send(embed=embed)
 
 
-def setup(bot: commands.Bot):
+def setup(bot: openpotd.OpenPOTD):
     bot.add_cog(Management(bot))
