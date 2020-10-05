@@ -96,7 +96,7 @@ class OpenPOTD(commands.Bot):
 
         elif isinstance(exception, commands.CommandNotFound):
             if isinstance(ctx.channel, discord.DMChannel):
-                await ctx.send("Command not recognised, please type `-help` for help.")
+                await ctx.send("Command not recognised!")
 
         elif isinstance(exception, commands.UserInputError):
             error = ' '.join(exception.args)
