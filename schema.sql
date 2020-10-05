@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS "problems" (
 	"base_points"	INTEGER NOT NULL DEFAULT 0,
 	"answer"	INTEGER NOT NULL,
 	"public"	BOOLEAN,
+	"source"    TEXT,
 	FOREIGN KEY("season") REFERENCES "seasons"("id")
 );
 CREATE TABLE IF NOT EXISTS "seasons" (

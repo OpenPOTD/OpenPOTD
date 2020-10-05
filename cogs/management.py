@@ -13,8 +13,10 @@ import openpotd
 
 authorised_set = set()
 
+
 def authorised(ctx):
     return ctx.author.id in authorised_set
+
 
 class Management(commands.Cog):
 
@@ -142,6 +144,7 @@ class Management(commands.Cog):
     @flags.add_flag('--difficulty', type=int)
     @flags.add_flag('--answer', type=int)
     @flags.add_flag('--public', type=bool)
+    @flags.add_flag('--source')
     @flags.command()
     @commands.check(authorised)
     async def update(self, ctx, potd: int, **flags):
@@ -171,7 +174,7 @@ class Management(commands.Cog):
             return
 
         columns = ['id', 'date', 'season', 'statement',
-                   'difficulty', 'weighted_solves', 'base_points', 'answer', 'public']
+                   'difficulty', 'weighted_solves', 'base_points', 'answer', 'public', 'source']
         embed = discord.Embed(title=f'POTD {result[0][0]}')
         for i in range(len(columns)):
             embed.add_field(name=columns[i], value=result[0][i], inline=False)
