@@ -32,8 +32,8 @@ class Management(commands.Cog):
     async def advance_potd(self):
         print(f'Advancing POTD at {datetime.now()}')
         cursor = self.bot.db.cursor()
-        cursor.execute('SELECT problems.id from (seasons left join problems on seasons.running = True '
-                       'and seasons.id = problems.season and problems.date = ? )', (str(date.today()),))
+        cursor.execute('SELECT problems.id from (seasons left join problems on seasons.running = ? '
+                       'and seasons.id = problems.season and problems.date = ? )', (True, str(date.today())))
         result = cursor.fetchall()
         potd_channel = self.bot.get_channel(self.bot.config['potd_channel'])
         if len(result) == 0 or result[0][0] is None:
