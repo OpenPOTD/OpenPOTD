@@ -6,6 +6,11 @@ from discord.ext import commands
 import openpotd
 
 
+# Change this if you want a different algorithm
+def weighted_score(attempts: int):
+    return 0.9 ** (attempts - 1)
+
+
 class Interface(commands.Cog):
     def __init__(self, bot: openpotd.OpenPOTD):
         self.bot = bot
@@ -35,8 +40,45 @@ class Interface(commands.Cog):
             await ctx.send(f"Registered you for {season}. ")
         self.bot.db.commit()
 
+    def update_rankings(self, season: int):
+        cursor = self.bot.db.cursor()
+
+        # Get all solves this season
+        cursor.execute('select solves.user, solves.problem_id, solves.num_attempts from problems left join solves '
+                       'where problems.season = ? and problems.id = solves.problem_id and official = ?', (season, True))
+        solves = cursor.fetchall()
+
+        # Get weighted attempts for each problem
+        weighted_attempts = {}
+        for solve in solves:
+            if solve[1] in weighted_attempts:
+                weighted_attempts[solve[1]] += weighted_score(solve[2])
+            else:
+                weighted_attempts[solve[1]] = weighted_score(solve[2])
+
+        # Calculate how many points each problem should be worth on the 1st attempt
+        problem_points = {i: self.bot.config['base_points'] / weighted_attempts[i] for i in weighted_attempts}
+
+        # Calculate scores of each person
+        total_score = {}
+        for solve in solves:
+            if solve[0] in total_score:
+                total_score[solve[0]] += problem_points[solve[1]] * weighted_score(solve[2])
+            else:
+                total_score[solve[0]] = problem_points[solve[1]] * weighted_score(solve[2])
+
+        # Prepare data to be put into the db
+        total_score_list = [(i, total_score[i]) for i in total_score]
+        total_score_list.sort(key=lambda x: -x[1])
+        cursor.executemany('update rankings SET rank = ?, score = ? WHERE user_id = ? and season_id = ?',
+                           [(i+1, total_score_list[i][1], total_score_list[i][0], season) for i in
+                            range(len(total_score_list))])
+
+        # Commit
+        self.bot.db.commit()
+
     def refresh(self, season: int):
-        pass
+        self.update_rankings(season)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -94,6 +136,7 @@ class Interface(commands.Cog):
                 # Insert data
                 cursor.execute('INSERT into solves (user, problem_id, num_attempts, official) VALUES (?, ?, ?, ?)',
                                (message.author.id, potd_id, num_attempts, True))
+                self.bot.db.commit()
 
                 # Recalculate scoreboard
                 self.refresh(season_id)
@@ -104,7 +147,6 @@ class Interface(commands.Cog):
                 # They got it wrong
                 await message.channel.send(f'You did not solve this problem! Number of attempts: `{num_attempts}`. ')
 
-            self.bot.db.commit()
 
 
 def setup(bot: openpotd.OpenPOTD):
