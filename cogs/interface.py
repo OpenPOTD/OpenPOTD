@@ -82,7 +82,8 @@ class Interface(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.guild is not None or message.author.id == self.bot.user.id:  # you can't submit answers in a server
+        if message.guild is not None or message.author.id == self.bot.user.id\
+                or message.content[0] == self.bot.config['prefix']:  # you can't submit answers in a server
             return
 
         # Validating int-ness
@@ -147,6 +148,28 @@ class Interface(commands.Cog):
                 # They got it wrong
                 await message.channel.send(f'You did not solve this problem! Number of attempts: `{num_attempts}`. ')
 
+
+    @commands.command()
+    async def ranking(self, ctx, season: int = None):
+        cursor = self.bot.db.cursor()
+        if season is None:
+            cursor.execute('SELECT id from seasons where running = ?', (True, ))
+            running_seasons = cursor.fetchall()
+            if len(running_seasons) == 0:
+                await ctx.send('No current running season. Please specify a season. ')
+                return
+            else:
+                season = running_seasons[0][0]
+
+        cursor.execute('SELECT rank, score from rankings where season_id = ? and user_id = ?', (season, ctx.author.id))
+        rank = cursor.fetchall()
+        if len(rank) == 0:
+            await ctx.send('You are not ranked in this season!')
+        else:
+            embed = discord.Embed(title=f'Season {season} ranking for {ctx.author.name}')
+            embed.add_field(name='Rank', value=rank[0][0])
+            embed.add_field(name='Score', value=rank[0][1])
+            await ctx.send(embed=embed)
 
 
 def setup(bot: openpotd.OpenPOTD):
