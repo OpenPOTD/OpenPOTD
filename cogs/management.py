@@ -79,8 +79,8 @@ class Management(commands.Cog):
     async def add(self, ctx, season: int, prob_date, answer, *, statement):
         cursor = self.bot.db.cursor()
         prob_date_parsed = date.fromisoformat(prob_date)
-        cursor.execute('''INSERT INTO problems ("date", season, statement, answer) VALUES (?, ?, ?, ?)''',
-                       (prob_date_parsed, season, statement, answer))
+        cursor.execute('''INSERT INTO problems ("date", season, statement, answer, public) VALUES (?, ?, ?, ?, ?)''',
+                       (prob_date_parsed, season, statement, answer, False))
         self.bot.db.commit()
         await ctx.send('Added problem. ')
 
@@ -179,6 +179,16 @@ class Management(commands.Cog):
         for i in range(len(columns)):
             embed.add_field(name=columns[i], value=result[0][i], inline=False)
         await ctx.send(embed=embed)
+
+    @commands.command()
+    @commands.is_owner()
+    async def execute_sql(self, ctx, *, sql):
+        cursor = self.bot.db.cursor()
+        try:
+            cursor.execute(sql)
+        except Exception as e:
+            await ctx.send(e)
+        await ctx.send(str(cursor.fetchall()))
 
 
 def setup(bot: openpotd.OpenPOTD):
