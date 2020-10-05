@@ -11,12 +11,18 @@ from discord.ext import flags
 
 import openpotd
 
+authorised_set = set()
+
+def authorised(ctx):
+    return ctx.author.id in authorised_set
 
 class Management(commands.Cog):
 
     def __init__(self, bot: openpotd.OpenPOTD):
         self.bot = bot
         schedule.every().day.at('17:17').do(self.schedule_potd)
+        global authorised_set
+        authorised_set = self.bot.config['authorised']
 
     def schedule_potd(self):
         self.bot.loop.create_task(self.advance_potd())
@@ -57,6 +63,7 @@ class Management(commands.Cog):
         self.bot.db.commit()
 
     @commands.command()
+    @commands.check(authorised)
     async def newseason(self, ctx, *, name):
         cursor = self.bot.db.cursor()
         cursor.execute('''INSERT INTO seasons (running, name) VALUES (?, ?)''', (False, name))
@@ -66,6 +73,7 @@ class Management(commands.Cog):
         await ctx.send(f'Added a new season called `{name}` with id `{rowid}`. ')
 
     @commands.command()
+    @commands.check(authorised)
     async def add(self, ctx, season: int, prob_date, answer, *, statement):
         cursor = self.bot.db.cursor()
         prob_date_parsed = date.fromisoformat(prob_date)
@@ -75,6 +83,7 @@ class Management(commands.Cog):
         await ctx.send('Added problem. ')
 
     @commands.command()
+    @commands.check(authorised)
     async def linkimg(self, ctx, potd: int):
         if len(ctx.message.attachments) < 1:
             await ctx.send("No attached file. ")
@@ -89,6 +98,7 @@ class Management(commands.Cog):
             save_path.close()
 
     @commands.command()
+    @commands.check(authorised)
     async def showpotd(self, ctx, potd):
         """Note: this is the admin version of the command so all problems are visible. """
 
@@ -133,6 +143,7 @@ class Management(commands.Cog):
     @flags.add_flag('--answer', type=int)
     @flags.add_flag('--public', type=bool)
     @flags.command()
+    @commands.check(authorised)
     async def update(self, ctx, potd: int, **flags):
         cursor = self.bot.db.cursor()
         if not flags['date'] is None and not bool(re.match(r'\d\d\d\d-\d\d-\d\d', flags['date'])):
@@ -146,6 +157,7 @@ class Management(commands.Cog):
         await ctx.send('Updated potd. ')
 
     @commands.command()
+    @commands.check(authorised)
     async def info(self, ctx, potd):
         cursor = self.bot.db.cursor()
         if potd.isdecimal():

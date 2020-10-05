@@ -14,6 +14,9 @@ posting_time:
 # Channel to post the POTDs in by default.
 potd_channel:
 
+# Who's authorised to use bot commands?
+authorised:
+
 # Cogs that need to be loaded with the bot
 cogs:
   - cogs.management
