@@ -58,9 +58,10 @@ CREATE TABLE IF NOT EXISTS "solves" (
 CREATE TABLE IF NOT EXISTS "rankings" (
 	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 	"season_id"	INTEGER,
-	"user_id"	INTEGER UNIQUE,
+	"user_id"	INTEGER,
 	"rank"	INTEGER,
 	"score"	REAL,
+	UNIQUE ("season_id", "user_id")
 	FOREIGN KEY("user_id") REFERENCES "users"("discord_id"),
 	FOREIGN KEY("season_id") REFERENCES "seasons"("id")
 );
