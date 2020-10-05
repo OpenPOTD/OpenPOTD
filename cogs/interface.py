@@ -167,6 +167,11 @@ class Interface(commands.Cog):
             await ctx.send('You are not ranked in this season!')
         else:
             embed = discord.Embed(title=f'Season {season} ranking for {ctx.author.name}')
+            if rank[0][0] <= 3:
+                colours = [0xc9b037, 0xd7d7d7, 0xad8a56]    # gold, silver, bronze
+                embed.colour = discord.Color(colours[rank[0][0]-1])
+            else:
+                embed.colour = discord.Color(0xffffff)
             embed.add_field(name='Rank', value=rank[0][0])
             embed.add_field(name='Score', value=rank[0][1])
             await ctx.send(embed=embed)
