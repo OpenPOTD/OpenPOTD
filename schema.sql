@@ -19,24 +19,6 @@ CREATE TABLE IF NOT EXISTS "attempts" (
 	FOREIGN KEY("user_id") REFERENCES "users"("discord_id"),
 	FOREIGN KEY("potd_id") REFERENCES "problems"("id")
 );
-CREATE TABLE IF NOT EXISTS "solves" (
-	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-	"user"  INTEGER,
-	"problem_id"    INTEGER,
-	"num_attempts"	INTEGER,	
-	FOREIGN KEY("user") REFERENCES "users"("discord_id"),
-	FOREIGN KEY("problem_id") REFERENCES "problems"("id")
-);
-
-CREATE TABLE IF NOT EXISTS "rankings" (
-	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-	"season_id"	INTEGER,
-	"user_id"	INTEGER,
-	"rank"	INTEGER,
-	"score"	REAL,
-	FOREIGN KEY("user_id") REFERENCES "users"("discord_id"),
-	FOREIGN KEY("season_id") REFERENCES "seasons"("id")
-);
 CREATE TABLE IF NOT EXISTS "ratings" (
 	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 	"userid"	INTEGER,
@@ -63,4 +45,22 @@ CREATE TABLE IF NOT EXISTS "seasons" (
 	"latest_potd"	INTEGER,
 	"name"	TEXT,
 	FOREIGN KEY("latest_potd") REFERENCES "problems"("id")
+);
+CREATE TABLE IF NOT EXISTS "solves" (
+	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"user"	INTEGER,
+	"problem_id"	INTEGER,
+	"num_attempts"	INTEGER,
+	"official"	BOOLEAN,
+	FOREIGN KEY("user") REFERENCES "users"("discord_id"),
+	FOREIGN KEY("problem_id") REFERENCES "problems"("id")
+);
+CREATE TABLE IF NOT EXISTS "rankings" (
+	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"season_id"	INTEGER,
+	"user_id"	INTEGER UNIQUE,
+	"rank"	INTEGER,
+	"score"	REAL,
+	FOREIGN KEY("user_id") REFERENCES "users"("discord_id"),
+	FOREIGN KEY("season_id") REFERENCES "seasons"("id")
 );
