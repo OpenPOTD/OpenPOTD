@@ -194,6 +194,42 @@ class Management(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command()
+    @commands.check(authorised)
+    async def start_season(self, ctx, season: int):
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT running from seasons where seasons.id = ?', (season,))
+        result = cursor.fetchall()
+
+        if len(result) == 0:
+            await ctx.send(f'No season with id {season}.')
+            return
+
+        running = result[0][0]
+        if not running:
+            cursor.execute('UPDATE seasons SET running = ? where seasons.id = ?', (True, season))
+            self.bot.db.commit()
+        else:
+            await ctx.send(f'Season {season} already running!')
+
+    @commands.command()
+    @commands.check(authorised)
+    async def end_season(self, ctx, season: int):
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT running from seasons where seasons.id = ?', (season,))
+        result = cursor.fetchall()
+
+        if len(result) == 0:
+            await ctx.send(f'No season with id {season}.')
+            return
+
+        running = result[0][0]
+        if running:
+            cursor.execute('UPDATE seasons SET running = ? where seasons.id = ?', (False, season))
+            self.bot.db.commit()
+        else:
+            await ctx.send(f'Season {season} already stopped!')
+
+    @commands.command()
     @commands.is_owner()
     async def execute_sql(self, ctx, *, sql):
         cursor = self.bot.db.cursor()
