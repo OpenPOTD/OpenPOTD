@@ -45,7 +45,7 @@ class OpenPOTD(commands.Bot):
             else:
                 self.logger.info('Loaded cog {}.'.format(cog))
 
-        logging.debug(f'Schedule: {schedule.jobs}')
+        self.logger.debug(f'Schedule: {schedule.jobs}')
 
     async def on_message(self, message):
         if message.author.bot: return
