@@ -22,7 +22,7 @@ class Management(commands.Cog):
 
     def __init__(self, bot: openpotd.OpenPOTD):
         self.bot = bot
-        schedule.every().day.at('17:17').do(self.schedule_potd)
+        schedule.every().day.at(self.bot.config['posting_time']).do(self.schedule_potd)
         global authorised_set
         authorised_set = self.bot.config['authorised']
 
