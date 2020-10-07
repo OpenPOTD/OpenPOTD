@@ -166,7 +166,7 @@ class Interface(commands.Cog):
                 await message.channel.send(f'You did not solve this problem! Number of attempts: `{num_attempts}`. ')
 
     @commands.command()
-    async def ranking(self, ctx, season: int = None):
+    async def score(self, ctx, season: int = None):
         cursor = self.bot.db.cursor()
         if season is None:
             cursor.execute('SELECT id from seasons where running = ?', (True,))
@@ -191,6 +191,24 @@ class Interface(commands.Cog):
             embed.add_field(name='Rank', value=rank[0][0])
             embed.add_field(name='Score', value=rank[0][1])
             await ctx.send(embed=embed)
+
+    @commands.command()
+    async def rank(self, ctx, season: int = None):
+        cursor = self.bot.db.cursor()
+        if season is None:
+            cursor.execute('SELECT id from seasons where running = ?', (True,))
+            running_seasons = cursor.fetchall()
+            if len(running_seasons) == 0:
+                await ctx.send('No current running season. Please specify a season. ')
+                return
+            else:
+                season = running_seasons[0][0]
+
+        cursor.execute('SELECT rank, score, user_id from rankings where season_id = ? order by rank', (season,))
+        rankings = cursor.fetchall()
+        embed = discord.Embed(title=f'Current rankings for season {season}',
+                              description='\n'.join((f'{rank[0]}. {rank[1]} [<@!{rank[2]}>]' for rank in rankings)))
+        await ctx.send(embed=embed)
 
 
 def setup(bot: openpotd.OpenPOTD):
