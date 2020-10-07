@@ -20,7 +20,7 @@ class OpenPOTD(commands.Bot):
         super().__init__(prefix)
         self.config = config
         self.db = sqlite3.connect('data/data.db')
-        logging.basicConfig(level=logging.INFO, format='[%(name)s %(levelname)s] %(message)s')
+        logging.basicConfig(level=logging.DEBUG, format='[%(name)s %(levelname)s] %(message)s')
         self.logger = logging.getLogger('bot')
         try:
             with open(f'config/{config["blacklist"]}', 'r') as blacklist:
