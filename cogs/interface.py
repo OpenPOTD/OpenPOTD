@@ -189,7 +189,7 @@ class Interface(commands.Cog):
             else:
                 embed.colour = discord.Color(0xffffff)
             embed.add_field(name='Rank', value=rank[0][0])
-            embed.add_field(name='Score', value=rank[0][1])
+            embed.add_field(name='Score', value=f'{rank[0][1]:.2f}')
             await ctx.send(embed=embed)
 
     @commands.command()
@@ -207,7 +207,7 @@ class Interface(commands.Cog):
         cursor.execute('SELECT rank, score, user_id from rankings where season_id = ? order by rank', (season,))
         rankings = cursor.fetchall()
         embed = discord.Embed(title=f'Current rankings for season {season}',
-                              description='\n'.join((f'{rank[0]}. {rank[1]} [<@!{rank[2]}>]' for rank in rankings)))
+                              description='\n'.join((f'{rank[0]}. {rank[1]:.2f} [<@!{rank[2]}>]' for rank in rankings)))
         await ctx.send(embed=embed)
 
 
