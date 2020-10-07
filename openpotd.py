@@ -20,7 +20,7 @@ class OpenPOTD(commands.Bot):
         super().__init__(prefix)
         self.config = config
         self.db = sqlite3.connect('data/data.db')
-        logging.basicConfig(level=logging.DEBUG, format='[%(name)s %(levelname)s] %(message)s')
+        logging.basicConfig(level=logging.INFO, format='[%(name)s %(levelname)s] %(message)s')
         self.logger = logging.getLogger('bot')
         try:
             with open(f'config/{config["blacklist"]}', 'r') as blacklist:
@@ -45,7 +45,7 @@ class OpenPOTD(commands.Bot):
             else:
                 self.logger.info('Loaded cog {}.'.format(cog))
 
-        self.logger.debug(f'Schedule: {schedule.jobs}')
+        self.logger.info(f'Schedule: {schedule.jobs}')
 
     async def on_message(self, message):
         if message.author.bot: return
