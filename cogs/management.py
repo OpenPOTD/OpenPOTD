@@ -58,8 +58,21 @@ class Management(commands.Cog):
         season_id = cursor.fetchall()[0][0]
         cursor.execute('UPDATE seasons SET latest_potd = ? WHERE id = ?', (potd_id, season_id))
 
-        # Make the new potd publically available
+        # Make the new potd publicly available
         cursor.execute('UPDATE problems SET public = ? WHERE id = ?', (True, potd_id))
+
+        # Remove the solved role from everyone
+        role_id = self.bot.config['solved_role_id']
+        if role_id is not None:
+            self.bot.logger.warning('Config variable solved_role_id is not set!')
+            for guild in self.bot.guilds:
+                if guild.get_role(role_id) is not None:
+                    role = guild.get_role(role_id)
+                    for member in role.members:
+                        await member.remove_roles(role)
+                    break
+            else:
+                self.bot.logger.error('No guild found with a role matching the id set in solved_role_id!')
 
         # Commit db
         self.bot.db.commit()

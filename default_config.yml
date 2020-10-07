@@ -17,6 +17,9 @@ potd_channel:
 # Who's authorised to use bot commands?
 authorised:
 
+# What's the ID of the role given to people who've solved each problem?
+solved_role_id:
+
 # Cogs that need to be loaded with the bot
 cogs:
   - cogs.management

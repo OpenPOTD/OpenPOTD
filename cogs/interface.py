@@ -71,7 +71,7 @@ class Interface(commands.Cog):
         total_score_list = [(i, total_score[i]) for i in total_score]
         total_score_list.sort(key=lambda x: -x[1])
         cursor.executemany('update rankings SET rank = ?, score = ? WHERE user_id = ? and season_id = ?',
-                           [(i+1, total_score_list[i][1], total_score_list[i][0], season) for i in
+                           [(i + 1, total_score_list[i][1], total_score_list[i][0], season) for i in
                             range(len(total_score_list))])
 
         # Commit
@@ -82,7 +82,7 @@ class Interface(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.guild is not None or message.author.id == self.bot.user.id\
+        if message.guild is not None or message.author.id == self.bot.user.id \
                 or message.content[0] == self.bot.config['prefix']:  # you can't submit answers in a server
             return
 
@@ -144,16 +144,32 @@ class Interface(commands.Cog):
 
                 # Alert user that they got the question correct
                 await message.channel.send(f'Thank you! You solved the problem after {num_attempts} attempts. ')
+
+                # Give them the "solved" role
+                role_id = self.bot.config['solved_role_id']
+                if role_id is not None:
+                    self.bot.logger.warning('Config variable solved_role_id is not set!')
+                    for guild in self.bot.guilds:
+                        if guild.get_role(role_id) is not None:
+                            member = guild.get_member(message.author.id)
+                            if member is not None:
+                                await member.add_roles(guild.get_role(role_id), reason='Solved potd')
+                            else:
+                                self.bot.logger.warning(f'User {message.author.id} solved the POTD despite not being '
+                                                        f'in the server. ')
+                            break
+                    else:
+                        self.bot.logger.error('No guild found with a role matching the id set in solved_role_id!')
+
             else:
                 # They got it wrong
                 await message.channel.send(f'You did not solve this problem! Number of attempts: `{num_attempts}`. ')
-
 
     @commands.command()
     async def ranking(self, ctx, season: int = None):
         cursor = self.bot.db.cursor()
         if season is None:
-            cursor.execute('SELECT id from seasons where running = ?', (True, ))
+            cursor.execute('SELECT id from seasons where running = ?', (True,))
             running_seasons = cursor.fetchall()
             if len(running_seasons) == 0:
                 await ctx.send('No current running season. Please specify a season. ')
@@ -168,8 +184,8 @@ class Interface(commands.Cog):
         else:
             embed = discord.Embed(title=f'Season {season} ranking for {ctx.author.name}')
             if rank[0][0] <= 3:
-                colours = [0xc9b037, 0xd7d7d7, 0xad8a56]    # gold, silver, bronze
-                embed.colour = discord.Color(colours[rank[0][0]-1])
+                colours = [0xc9b037, 0xd7d7d7, 0xad8a56]  # gold, silver, bronze
+                embed.colour = discord.Color(colours[rank[0][0] - 1])
             else:
                 embed.colour = discord.Color(0xffffff)
             embed.add_field(name='Rank', value=rank[0][0])
