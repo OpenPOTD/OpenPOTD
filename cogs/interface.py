@@ -169,20 +169,21 @@ class Interface(commands.Cog):
     async def score(self, ctx, season: int = None):
         cursor = self.bot.db.cursor()
         if season is None:
-            cursor.execute('SELECT id from seasons where running = ?', (True,))
+            cursor.execute('SELECT id, name from seasons where running = ?', (True,))
             running_seasons = cursor.fetchall()
             if len(running_seasons) == 0:
                 await ctx.send('No current running season. Please specify a season. ')
                 return
             else:
                 season = running_seasons[0][0]
+                szn_name = running_seasons[0][1]
 
         cursor.execute('SELECT rank, score from rankings where season_id = ? and user_id = ?', (season, ctx.author.id))
         rank = cursor.fetchall()
         if len(rank) == 0:
             await ctx.send('You are not ranked in this season!')
         else:
-            embed = discord.Embed(title=f'Season {season} ranking for {ctx.author.name}')
+            embed = discord.Embed(title=f'{szn_name} ranking for {ctx.author.name}')
             if rank[0][0] <= 3:
                 colours = [0xc9b037, 0xd7d7d7, 0xad8a56]  # gold, silver, bronze
                 embed.colour = discord.Color(colours[rank[0][0] - 1])
@@ -196,17 +197,18 @@ class Interface(commands.Cog):
     async def rank(self, ctx, season: int = None):
         cursor = self.bot.db.cursor()
         if season is None:
-            cursor.execute('SELECT id from seasons where running = ?', (True,))
+            cursor.execute('SELECT id, name from seasons where running = ?', (True,))
             running_seasons = cursor.fetchall()
             if len(running_seasons) == 0:
                 await ctx.send('No current running season. Please specify a season. ')
                 return
             else:
                 season = running_seasons[0][0]
+                szn_name = running_seasons[0][1]
 
         cursor.execute('SELECT rank, score, user_id from rankings where season_id = ? order by rank', (season,))
         rankings = cursor.fetchall()
-        embed = discord.Embed(title=f'Current rankings for season {season}',
+        embed = discord.Embed(title=f'Current rankings for {szn_name}',
                               description='\n'.join((f'{rank[0]}. {rank[1]:.2f} [<@!{rank[2]}>]' for rank in rankings)))
         await ctx.send(embed=embed)
 
