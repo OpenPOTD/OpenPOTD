@@ -54,6 +54,7 @@ class Management(commands.Cog):
                                                       filename=f'POTD-{potd_id}-0.png'))
             for i in range(1, len(images)):
                 await potd_channel.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
+        await potd_channel.send(f'DM your answers to me! ')
 
         # Advance the season
         cursor.execute('SELECT season FROM problems WHERE id = ?', (potd_id,))
