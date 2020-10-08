@@ -78,6 +78,10 @@ class Management(commands.Cog):
         self.bot.db.commit()
 
     @commands.command()
+    async def post(self, ctx):
+        await self.advance_potd()
+
+    @commands.command()
     @commands.check(authorised)
     async def newseason(self, ctx, *, name):
         cursor = self.bot.db.cursor()
