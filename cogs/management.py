@@ -84,6 +84,7 @@ class Management(commands.Cog):
         self.logger.info(f'Posted POTD {potd_id}. ')
 
     @commands.command()
+    @commands.check(authorised)
     async def post(self, ctx):
         await self.advance_potd()
 
