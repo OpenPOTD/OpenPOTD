@@ -1,5 +1,5 @@
 from datetime import datetime
-
+import logging
 import discord
 from discord.ext import commands
 
@@ -14,6 +14,7 @@ def weighted_score(attempts: int):
 class Interface(commands.Cog):
     def __init__(self, bot: openpotd.OpenPOTD):
         self.bot = bot
+        self.logger = logging.getLogger('interface')
 
     @commands.command()
     @commands.check(lambda ctx: False)  # This command is disabled since it only applies for multi-server config
@@ -148,22 +149,28 @@ class Interface(commands.Cog):
                 # Give them the "solved" role
                 role_id = self.bot.config['solved_role_id']
                 if role_id is not None:
-                    self.bot.logger.warning('Config variable solved_role_id is not set!')
+                    self.logger.warning('Config variable solved_role_id is not set!')
                     for guild in self.bot.guilds:
                         if guild.get_role(role_id) is not None:
                             member = guild.get_member(message.author.id)
                             if member is not None:
                                 await member.add_roles(guild.get_role(role_id), reason='Solved potd')
                             else:
-                                self.bot.logger.warning(f'User {message.author.id} solved the POTD despite not being '
+                                self.logger.warning(f'User {message.author.id} solved the POTD despite not being '
                                                         f'in the server. ')
                             break
                     else:
-                        self.bot.logger.error('No guild found with a role matching the id set in solved_role_id!')
+                        self.logger.error('No guild found with a role matching the id set in solved_role_id!')
+
+                # Logged that they solved it
+                self.logger.info(f'User {message.author.id} just solved potd {potd_id}. ')
 
             else:
                 # They got it wrong
                 await message.channel.send(f'You did not solve this problem! Number of attempts: `{num_attempts}`. ')
+
+                # Log that they didn't solve it
+                self.logger.info(f'User {message.author.id} submitted incorrect answer {answer} for potd {potd_id}. ')
 
     @commands.command()
     async def score(self, ctx, season: int = None):

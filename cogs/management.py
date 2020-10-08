@@ -3,6 +3,7 @@ import re
 import sqlite3
 from datetime import date
 from datetime import datetime
+import logging
 
 import discord
 import schedule
@@ -22,6 +23,7 @@ class Management(commands.Cog):
 
     def __init__(self, bot: openpotd.OpenPOTD):
         self.bot = bot
+        self.logger = logging.getLogger('management')
         schedule.every().day.at(self.bot.config['posting_time']).do(self.schedule_potd)
         global authorised_set
         authorised_set = self.bot.config['authorised']
@@ -77,6 +79,9 @@ class Management(commands.Cog):
         # Commit db
         self.bot.db.commit()
 
+        # Log this
+        self.logger.info(f'Posted POTD {potd_id}. ')
+
     @commands.command()
     async def post(self, ctx):
         await self.advance_potd()
@@ -90,6 +95,7 @@ class Management(commands.Cog):
         cursor.execute('''SELECT LAST_INSERT_ROWID()''')
         rowid = cursor.fetchone()[0]
         await ctx.send(f'Added a new season called `{name}` with id `{rowid}`. ')
+        self.logger.info(f'{ctx.author.id} added a new season called {name} with id {rowid}. ')
 
     @commands.command()
     @commands.check(authorised)
@@ -100,6 +106,7 @@ class Management(commands.Cog):
                        (prob_date_parsed, season, statement, answer, False))
         self.bot.db.commit()
         await ctx.send('Added problem. ')
+        self.logger.info(f'{ctx.author.id} added a new problem. ')
 
     @commands.command()
     @commands.check(authorised)
@@ -212,6 +219,7 @@ class Management(commands.Cog):
         if not running:
             cursor.execute('UPDATE seasons SET running = ? where seasons.id = ?', (True, season))
             self.bot.db.commit()
+            self.logger.info(f'Started season with id {season}. ')
         else:
             await ctx.send(f'Season {season} already running!')
 
@@ -230,6 +238,7 @@ class Management(commands.Cog):
         if running:
             cursor.execute('UPDATE seasons SET running = ? where seasons.id = ?', (False, season))
             self.bot.db.commit()
+            self.logger.info(f'Ended season with id {season}. ')
         else:
             await ctx.send(f'Season {season} already stopped!')
 
