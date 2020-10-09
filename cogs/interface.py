@@ -72,7 +72,6 @@ class Interface(commands.Cog):
 
         # Log stuff
         self.logger.info('Updating rankings')
-        self.logger.info(f'Total scores: {str(total_score)}')
 
         # Prepare data to be put into the db
         total_score_list = [(i, total_score[i]) for i in total_score]
