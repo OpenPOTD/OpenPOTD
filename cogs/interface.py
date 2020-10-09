@@ -209,6 +209,7 @@ class Interface(commands.Cog):
     @commands.command()
     async def rank(self, ctx, season: int = None):
         cursor = self.bot.db.cursor()
+        szn_name = None
         if season is None:
             cursor.execute('SELECT id, name from seasons where running = ?', (True,))
             running_seasons = cursor.fetchall()
