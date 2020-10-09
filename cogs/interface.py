@@ -194,7 +194,7 @@ class Interface(commands.Cog):
                 season = running_seasons[0][0]
                 szn_name = running_seasons[0][1]
         else:
-            cursor.execute('SELECT id, name from seasons where season = ?', (season,))
+            cursor.execute('SELECT id, name from seasons where id = ?', (season,))
             selected_seasons = cursor.fetchall()
             if len(selected_seasons) == 0:
                 await ctx.send(f'No season with id {season}. Please specify a valid season. ')
@@ -231,7 +231,7 @@ class Interface(commands.Cog):
                 season = running_seasons[0][0]
                 szn_name = running_seasons[0][1]
         else:
-            cursor.execute('SELECT id, name from seasons where season = ?', (season,))
+            cursor.execute('SELECT id, name from seasons where id = ?', (season,))
             selected_seasons = cursor.fetchall()
             if len(selected_seasons) == 0:
                 await ctx.send(f'No season with id {season}. Please specify a valid season. ')
