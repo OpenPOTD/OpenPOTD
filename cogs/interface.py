@@ -185,7 +185,6 @@ class Interface(commands.Cog):
     @commands.command()
     async def score(self, ctx, season: int = None):
         cursor = self.bot.db.cursor()
-        szn_name = None
         if season is None:
             cursor.execute('SELECT id, name from seasons where running = ?', (True,))
             running_seasons = cursor.fetchall()
@@ -195,6 +194,15 @@ class Interface(commands.Cog):
             else:
                 season = running_seasons[0][0]
                 szn_name = running_seasons[0][1]
+        else:
+            cursor.execute('SELECT id, name from seasons where season = ?', (season,))
+            selected_seasons = cursor.fetchall()
+            if len(selected_seasons) == 0:
+                await ctx.send(f'No season with id {season}. Please specify a valid season. ')
+                return
+            else:
+                season = selected_seasons[0][0]
+                szn_name = selected_seasons[0][1]
 
         cursor.execute('SELECT rank, score from rankings where season_id = ? and user_id = ?', (season, ctx.author.id))
         rank = cursor.fetchall()
@@ -214,7 +222,6 @@ class Interface(commands.Cog):
     @commands.command()
     async def rank(self, ctx, season: int = None):
         cursor = self.bot.db.cursor()
-        szn_name = None
         if season is None:
             cursor.execute('SELECT id, name from seasons where running = ?', (True,))
             running_seasons = cursor.fetchall()
@@ -224,6 +231,15 @@ class Interface(commands.Cog):
             else:
                 season = running_seasons[0][0]
                 szn_name = running_seasons[0][1]
+        else:
+            cursor.execute('SELECT id, name from seasons where season = ?', (season,))
+            selected_seasons = cursor.fetchall()
+            if len(selected_seasons) == 0:
+                await ctx.send(f'No season with id {season}. Please specify a valid season. ')
+                return
+            else:
+                season = selected_seasons[0][0]
+                szn_name = selected_seasons[0][1]
 
         cursor.execute('SELECT rank, score, user_id from rankings where season_id = ? order by rank', (season,))
         rankings = cursor.fetchall()
