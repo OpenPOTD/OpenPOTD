@@ -60,13 +60,14 @@ class Interface(commands.Cog):
         # Calculate how many points each problem should be worth on the 1st attempt
         problem_points = {i: self.bot.config['base_points'] / weighted_attempts[i] for i in weighted_attempts}
 
+        # Get all ranked people
+        cursor.execute('select id from rankings where season_id = ?', (season,))
+        ranked_users = cursor.fetchall()
+
         # Calculate scores of each person
-        total_score = {}
+        total_score = {user[0] : 0 for user in ranked_users}
         for solve in solves:
-            if solve[0] in total_score:
-                total_score[solve[0]] += problem_points[solve[1]] * weighted_score(solve[2])
-            else:
-                total_score[solve[0]] = problem_points[solve[1]] * weighted_score(solve[2])
+            total_score[solve[0]] += problem_points[solve[1]] * weighted_score(solve[2])
 
         # Prepare data to be put into the db
         total_score_list = [(i, total_score[i]) for i in total_score]
@@ -128,6 +129,7 @@ class Interface(commands.Cog):
             cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time) '
                            'VALUES (?, ?, ?, ?, ?)',
                            (message.author.id, potd_id, True, int(message.content), datetime.utcnow()))
+            self.bot.db.commit()
 
             # Calculate the number of attempts
             cursor.execute('SELECT count(1) from attempts where attempts.potd_id = ? and attempts.user_id = ?',
@@ -169,12 +171,16 @@ class Interface(commands.Cog):
                 # They got it wrong
                 await message.channel.send(f'You did not solve this problem! Number of attempts: `{num_attempts}`. ')
 
+                # Recalculate stuff anyway
+                self.refresh(season_id)
+
                 # Log that they didn't solve it
                 self.logger.info(f'User {message.author.id} submitted incorrect answer {answer} for potd {potd_id}. ')
 
     @commands.command()
     async def score(self, ctx, season: int = None):
         cursor = self.bot.db.cursor()
+        szn_name = None
         if season is None:
             cursor.execute('SELECT id, name from seasons where running = ?', (True,))
             running_seasons = cursor.fetchall()
