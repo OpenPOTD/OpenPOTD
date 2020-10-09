@@ -161,7 +161,6 @@ class Interface(commands.Cog):
                 # Give them the "solved" role
                 role_id = self.bot.config['solved_role_id']
                 if role_id is not None:
-                    self.logger.warning('Config variable solved_role_id is not set!')
                     for guild in self.bot.guilds:
                         if guild.get_role(role_id) is not None:
                             member = guild.get_member(message.author.id)
@@ -173,6 +172,8 @@ class Interface(commands.Cog):
                             break
                     else:
                         self.logger.error('No guild found with a role matching the id set in solved_role_id!')
+                else:
+                    self.logger.warning('Config variable solved_role_id is not set!')
 
                 # Logged that they solved it
                 self.logger.info(f'User {message.author.id} just solved potd {potd_id}. ')
