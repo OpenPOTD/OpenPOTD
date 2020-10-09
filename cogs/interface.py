@@ -1,5 +1,6 @@
-from datetime import datetime
 import logging
+from datetime import datetime
+
 import discord
 from discord.ext import commands
 
@@ -61,11 +62,11 @@ class Interface(commands.Cog):
         problem_points = {i: self.bot.config['base_points'] / weighted_attempts[i] for i in weighted_attempts}
 
         # Get all ranked people
-        cursor.execute('select id from rankings where season_id = ?', (season,))
+        cursor.execute('select user_id from rankings where season_id = ?', (season,))
         ranked_users = cursor.fetchall()
 
         # Calculate scores of each person
-        total_score = {user[0] : 0 for user in ranked_users}
+        total_score = {user[0]: 0 for user in ranked_users}
         for solve in solves:
             total_score[solve[0]] += problem_points[solve[1]] * weighted_score(solve[2])
 
@@ -163,7 +164,7 @@ class Interface(commands.Cog):
                                 await member.add_roles(guild.get_role(role_id), reason='Solved potd')
                             else:
                                 self.logger.warning(f'User {message.author.id} solved the POTD despite not being '
-                                                        f'in the server. ')
+                                                    f'in the server. ')
                             break
                     else:
                         self.logger.error('No guild found with a role matching the id set in solved_role_id!')
