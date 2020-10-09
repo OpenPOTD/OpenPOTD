@@ -69,6 +69,10 @@ class Interface(commands.Cog):
         for solve in solves:
             total_score[solve[0]] += problem_points[solve[1]] * weighted_score(solve[2])
 
+        # Log stuff
+        self.logger.info('Updating rankings')
+        self.logger.info(f'Total scores: {str(total_score)}')
+
         # Prepare data to be put into the db
         total_score_list = [(i, total_score[i]) for i in total_score]
         total_score_list.sort(key=lambda x: -x[1])
