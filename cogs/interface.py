@@ -130,10 +130,16 @@ class Interface(commands.Cog):
                 return
 
             # We got to record the submission anyway even if it is right or wrong
-            cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time) '
-                           'VALUES (?, ?, ?, ?, ?)',
-                           (message.author.id, potd_id, True, int(message.content), datetime.utcnow()))
-            self.bot.db.commit()
+            try:
+                cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time) '
+                               'VALUES (?, ?, ?, ?, ?)',
+                               (message.author.id, potd_id, True, int(message.content), datetime.utcnow()))
+                self.bot.db.commit()
+            except OverflowError:
+                cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time '
+                               'VALUES (?, ?, ?, ?, ?)',
+                               (message.author.id, potd_id, True, -1000, datetime.utcnow()))
+                self.bot.db.commit()
 
             # Calculate the number of attempts
             cursor.execute('SELECT count(1) from attempts where attempts.potd_id = ? and attempts.user_id = ?',
