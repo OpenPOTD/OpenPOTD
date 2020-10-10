@@ -251,7 +251,7 @@ class Interface(commands.Cog):
         rankings = cursor.fetchall()
         embed = discord.Embed(title=f'Current rankings for {szn_name}',
                               description='\n'.join((f'{rank[0]}. {rank[1]:.2f} [<@!{rank[2]}>]' for rank in rankings)))
-        await ctx.send(embed=embed)
+        await ctx.author.send(embed=embed)
 
 
 def setup(bot: openpotd.OpenPOTD):
