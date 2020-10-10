@@ -130,10 +130,16 @@ class Interface(commands.Cog):
                 return
 
             # We got to record the submission anyway even if it is right or wrong
-            cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time) '
-                           'VALUES (?, ?, ?, ?, ?)',
-                           (message.author.id, potd_id, True, int(message.content), datetime.utcnow()))
-            self.bot.db.commit()
+            try:
+                cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time) '
+                               'VALUES (?, ?, ?, ?, ?)',
+                               (message.author.id, potd_id, True, int(message.content), datetime.utcnow()))
+                self.bot.db.commit()
+            except OverflowError:
+                cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time '
+                               'VALUES (?, ?, ?, ?, ?)',
+                               (message.author.id, potd_id, True, -1000, datetime.utcnow()))
+                self.bot.db.commit()
 
             # Calculate the number of attempts
             cursor.execute('SELECT count(1) from attempts where attempts.potd_id = ? and attempts.user_id = ?',
@@ -155,7 +161,6 @@ class Interface(commands.Cog):
                 # Give them the "solved" role
                 role_id = self.bot.config['solved_role_id']
                 if role_id is not None:
-                    self.logger.warning('Config variable solved_role_id is not set!')
                     for guild in self.bot.guilds:
                         if guild.get_role(role_id) is not None:
                             member = guild.get_member(message.author.id)
@@ -167,6 +172,8 @@ class Interface(commands.Cog):
                             break
                     else:
                         self.logger.error('No guild found with a role matching the id set in solved_role_id!')
+                else:
+                    self.logger.warning('Config variable solved_role_id is not set!')
 
                 # Logged that they solved it
                 self.logger.info(f'User {message.author.id} just solved potd {potd_id}. ')
@@ -244,7 +251,7 @@ class Interface(commands.Cog):
         rankings = cursor.fetchall()
         embed = discord.Embed(title=f'Current rankings for {szn_name}',
                               description='\n'.join((f'{rank[0]}. {rank[1]:.2f} [<@!{rank[2]}>]' for rank in rankings)))
-        await ctx.send(embed=embed)
+        await ctx.author.send(embed=embed)
 
 
 def setup(bot: openpotd.OpenPOTD):
