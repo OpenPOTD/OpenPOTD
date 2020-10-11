@@ -1,3 +1,4 @@
+import io
 import logging
 from datetime import datetime
 
@@ -5,6 +6,7 @@ import discord
 from discord.ext import commands
 
 import openpotd
+import shared
 
 
 # Change this if you want a different algorithm
@@ -252,6 +254,29 @@ class Interface(commands.Cog):
         embed = discord.Embed(title=f'Current rankings for {szn_name}',
                               description='\n'.join((f'{rank[0]}. {rank[1]:.2f} [<@!{rank[2]}>]' for rank in rankings)))
         await ctx.author.send(embed=embed)
+
+    @commands.command()
+    async def fetch(self, ctx, date_or_id):
+        try:
+            potd_id = shared.id_from_date_or_id(date_or_id, self.bot.db, is_public=True)
+        except Exception as e:
+            await ctx.send(e)
+            return
+
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT date from problems where id = ?', (potd_id,))
+        potd_date = cursor.fetchall()[0][0]
+
+        # Display the potd to the user
+        cursor.execute('''SELECT image FROM images WHERE potd_id = ?''', (potd_id,))
+        images = cursor.fetchall()
+        if len(images) == 0:
+            await ctx.send(f'POTD {potd_id} of {potd_date} has no picture attached. ')
+        else:
+            await ctx.send(f'POTD {potd_id} of {potd_date}', file=discord.File(io.BytesIO(images[0][0]),
+                                                                               filename=f'POTD-{potd_id}-0.png'))
+            for i in range(1, len(images)):
+                await ctx.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
 
 
 def setup(bot: openpotd.OpenPOTD):
