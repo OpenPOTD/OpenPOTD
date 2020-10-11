@@ -278,6 +278,66 @@ class Interface(commands.Cog):
             for i in range(1, len(images)):
                 await ctx.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
 
+    @commands.command()
+    async def check(self, ctx, date_or_id, answer: int):
+        # Get the POTD id
+        try:
+            potd_id = shared.id_from_date_or_id(date_or_id, self.bot.db, is_public=True)
+        except Exception as e:
+            await ctx.send(e)
+            return
+
+        cursor = self.bot.db.cursor()
+
+        # Check that it's not part of a currently running season.
+        cursor.execute('SELECT name from seasons where latest_potd = ?', (potd_id,))
+        seasons = cursor.fetchall()
+        if len(seasons) > 0:
+            await ctx.send(f"This potd is part of {seasons[0][0]}. Please just DM your answer for this POTD to me. ")
+            return
+
+        # Get the correct answer
+        cursor.execute('SELECT answer from problems where id = ?', (potd_id,))
+        correct_answer = cursor.fetchall()[0][0]
+        answer_is_correct = correct_answer == answer
+
+        # See whether they've solved it before
+        cursor.execute('SELECT exists (select * from solves where solves.user = ? and solves.problem_id = ?',
+                       (ctx.author.id, potd_id))
+        solved_before = cursor.fetchall()[0][0]
+
+        # Make sure the user is registered
+        cursor.execute('INSERT or IGNORE into users (discord_id) VALUES (?)', (ctx.author.id,))
+
+        # Record an attempt even if they've solved before
+        cursor.execute('INSERT INTO attempts (user_id, potd_id, official, submission, submit_time',
+                       (ctx.author.id, potd_id, False, answer, datetime.now()))
+
+        # Get the number of both official and unofficial attempts
+        cursor.execute('SELECT COUNT(1) from attempts WHERE user_id = ?, potd_id = ?, official = ?',
+                       (ctx.author.id, potd_id, True))
+        official_attempts = cursor.fetchall()[0][0]
+        cursor.execute('SELECT COUNT(1) from attempts WHERE user_id = ?, potd_id = ?, official = ?',
+                       (ctx.author.id, potd_id, False))
+        unofficial_attempts = cursor.fetchall()[0][0]
+
+        if answer_is_correct:
+            if not solved_before:
+                # Record that they solved it.
+                cursor.execute('INSERT INTO solves (user, problem_id, num_attempts, official) VALUES (?, ?, ?, ?)',
+                               (ctx.author.id, potd_id, official_attempts + unofficial_attempts, False))
+                await ctx.send(f'Nice job! You solved POTD `{potd_id}` after `{official_attempts+unofficial_attempts}` '
+                               f'attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ')
+            else:
+                # Don't need to record that they solved it.
+                await ctx.send(f'Nice job! However you solved this POTD already. ')
+        else:
+            await ctx.send(f"Sorry! That's the wrong answer. You've had `{official_attempts+unofficial_attempts}` "
+                           f"attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ")
+
+        # Delete the message if it's in a guild
+        if ctx.guild is not None:
+            await ctx.message.delete()
 
 def setup(bot: openpotd.OpenPOTD):
     bot.add_cog(Interface(bot))
