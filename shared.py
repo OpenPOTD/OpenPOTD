@@ -34,7 +34,7 @@ def id_from_date_or_id(date_or_id: str, conn: sqlite3.Connection, is_public: boo
         else:
             cursor.execute('SELECT EXISTS (SELECT id from problems where problems.id = ? limit 1)', (potd_id,))
         if cursor.fetchall()[0][0]:
-            return id
+            return potd_id
         else:
             raise Exception(f'There are no problems available for the id {date_or_id}. ')
     else:
