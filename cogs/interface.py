@@ -1,12 +1,14 @@
+import io
 import logging
 from datetime import datetime
 
 import discord
 from discord.ext import commands
 from discord.message import Message
+import dpymenus
 
 import openpotd
-import dpymenus
+import shared
 
 # Change this if you want a different algorithm
 def weighted_score(attempts: int):
@@ -279,6 +281,100 @@ class Interface(commands.Cog):
         else:
             pass
             #TODO: Fix it to make the bot send the dm through the potd channel
+
+    @commands.command()
+    async def fetch(self, ctx, date_or_id):
+        try:
+            potd_id = shared.id_from_date_or_id(date_or_id, self.bot.db, is_public=True)
+        except Exception as e:
+            await ctx.send(e)
+            return
+
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT date from problems where id = ?', (potd_id,))
+        potd_date = cursor.fetchall()[0][0]
+
+        # Display the potd to the user
+        cursor.execute('''SELECT image FROM images WHERE potd_id = ?''', (potd_id,))
+        images = cursor.fetchall()
+        if len(images) == 0:
+            await ctx.send(f'POTD {potd_id} of {potd_date} has no picture attached. ')
+        else:
+            await ctx.send(f'POTD {potd_id} of {potd_date}', file=discord.File(io.BytesIO(images[0][0]),
+                                                                               filename=f'POTD-{potd_id}-0.png'))
+            for i in range(1, len(images)):
+                await ctx.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
+
+        # Log this stuff
+        self.logger.info(f'User {ctx.author.id} requested POTD with date {potd_date} and number {potd_id}. ')
+
+    @commands.command()
+    async def check(self, ctx, date_or_id, answer: int):
+        # Get the POTD id
+        try:
+            potd_id = shared.id_from_date_or_id(date_or_id, self.bot.db, is_public=True)
+        except Exception as e:
+            await ctx.send(e)
+            return
+
+        cursor = self.bot.db.cursor()
+
+        # Check that it's not part of a currently running season.
+        cursor.execute('SELECT name from seasons where latest_potd = ?', (potd_id,))
+        seasons = cursor.fetchall()
+        if len(seasons) > 0:
+            await ctx.send(f"This potd is part of {seasons[0][0]}. Please just DM your answer for this POTD to me. ")
+            return
+
+        # Get the correct answer
+        cursor.execute('SELECT answer from problems where id = ?', (potd_id,))
+        correct_answer = cursor.fetchall()[0][0]
+        answer_is_correct = correct_answer == answer
+
+        # See whether they've solved it before
+        cursor.execute('SELECT exists (select * from solves where solves.user = ? and solves.problem_id = ?)',
+                       (ctx.author.id, potd_id))
+        solved_before = cursor.fetchall()[0][0]
+
+        # Make sure the user is registered
+        cursor.execute('INSERT or IGNORE into users (discord_id) VALUES (?)', (ctx.author.id,))
+
+        # Record an attempt even if they've solved before
+        cursor.execute('INSERT INTO attempts (user_id, potd_id, official, submission, submit_time) VALUES (?,?,?,?,?)',
+                       (ctx.author.id, potd_id, False, answer, datetime.now()))
+
+        # Get the number of both official and unofficial attempts
+        cursor.execute('SELECT COUNT(1) from attempts WHERE user_id = ? and potd_id = ? and official = ?',
+                       (ctx.author.id, potd_id, True))
+        official_attempts = cursor.fetchall()[0][0]
+        cursor.execute('SELECT COUNT(1) from attempts WHERE user_id = ? and potd_id = ? and official = ?',
+                       (ctx.author.id, potd_id, False))
+        unofficial_attempts = cursor.fetchall()[0][0]
+
+        if answer_is_correct:
+            if not solved_before:
+                # Record that they solved it.
+                cursor.execute('INSERT INTO solves (user, problem_id, num_attempts, official) VALUES (?, ?, ?, ?)',
+                               (ctx.author.id, potd_id, official_attempts + unofficial_attempts, False))
+                await ctx.send(
+                    f'Nice job! You solved POTD `{potd_id}` after `{official_attempts + unofficial_attempts}` '
+                    f'attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ')
+            else:
+                # Don't need to record that they solved it.
+                await ctx.send(f'Nice job! However you solved this POTD already. ')
+
+            # Log this stuff
+            self.logger.info(f'[Unofficial] User {ctx.author.id} solved POTD {potd_id}')
+        else:
+            await ctx.send(f"Sorry! That's the wrong answer. You've had `{official_attempts + unofficial_attempts}` "
+                           f"attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ")
+
+            # Log this stuff
+            self.logger.info(f'[Unofficial] User {ctx.author.id} submitted wrong answer {answer} for POTD {potd_id}. ')
+
+        # Delete the message if it's in a guild
+        if ctx.guild is not None:
+            await ctx.message.delete()
 
 
 def setup(bot: openpotd.OpenPOTD):
