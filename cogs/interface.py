@@ -253,17 +253,20 @@ class Interface(commands.Cog):
         # embed = discord.Embed(title=f'Current rankings for {szn_name}',
         #                      description='\n'.join((f'{rank[0]}. {rank[1]:.2f} [<@!{rank[2]}>]' for rank in rankings)))
         menu = dpymenus.PaginatedMenu(ctx)
-        for i in range(len(rankings) // 10):
-            page = dpymenus.Page(title = "Page " + i)
-            for j in range(i):
-                page.add_field(name = rankings[j][0], value = str(rankings[j][1]) + "(" + str(rankings[j][2]) )
-            menu.add_page(page)
+        
+        pages = []
+        for i in range(len(rankings) // 20 + 1):
+            page = dpymenus.Page(title=f'{szn_name} rankings - Page {i+1}')
+            scores = '\n'.join([f'{rank}. {score} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20*i:20*i+20]])
+            page.description = scores
+            pages.append(page)
+        menu.add_pages(pages)
         await menu.open()
 
     async def build_embed(self, problem_id):
         embed = discord.Embed(title = "PoTD Solves")
         cursor = self.bot.db.cursor()
-        cursor.execute('SELECT date, weighted_solves, embed_id, channel_id FROM problems WHERE id = ?', (problem_id))
+        cursor.execute('SELECT date, weighted_solves, embed_id, channel_id FROM problems WHERE id = ?', (problem_id,))
         potd_information = cursor.fetchall()
         embed = discord.embed(title = "PoTD solves")
         embed.add_field("Date: " + potd_information[0])
