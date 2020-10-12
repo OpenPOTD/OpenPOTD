@@ -106,7 +106,11 @@ class OpenPOTD(commands.Bot):
             if not error_data:
                 await ctx.send('Huh? {}'.format(' '.join(exception.args)))
             else:
-                await ctx.send('Huh? I thought `{1}` was supposed to be a `{0}`...'.format(*error_data[0]))
+                if error_data[0][0][0] in 'aeiouAEIOU':
+                      anindicator='n'
+                else:
+                      anindicator=''
+                await ctx.send('Huh? I thought `{1}` was supposed to be a{2} `{0}`...'.format(*error_data[0],anindicator))
         else:
             info = traceback.format_exception(type(exception), exception, exception.__traceback__, chain=False)
             self.logger.error('Unhandled command exception - {}'.format(''.join(info)))
