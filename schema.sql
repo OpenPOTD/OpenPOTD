@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS "problems" (
 	"answer"	INTEGER NOT NULL,
 	"public"	BOOLEAN,
 	"source"    TEXT,
+	"embed_id" INTEGER DEFAULT 0,
+	"channel_id" INTEGER DEFAULT 0,
 	FOREIGN KEY("season") REFERENCES "seasons"("id")
 );
 CREATE TABLE IF NOT EXISTS "seasons" (
