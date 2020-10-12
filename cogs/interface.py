@@ -252,14 +252,12 @@ class Interface(commands.Cog):
 
         cursor.execute('SELECT rank, score, user_id from rankings where season_id = ? order by rank', (season,))
         rankings = cursor.fetchall()
-        # embed = discord.Embed(title=f'Current rankings for {szn_name}',
-        #                      description='\n'.join((f'{rank[0]}. {rank[1]:.2f} [<@!{rank[2]}>]' for rank in rankings)))
         menu = dpymenus.PaginatedMenu(ctx)
         
         pages = []
         for i in range(len(rankings) // 20 + 1):
             page = dpymenus.Page(title=f'{szn_name} rankings - Page {i+1}')
-            scores = '\n'.join([f'{rank}. {score} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20*i:20*i+20]])
+            scores = '\n'.join([f'{rank}. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20*i:20*i+20]])
             page.description = scores
             pages.append(page)
         menu.add_pages(pages)
