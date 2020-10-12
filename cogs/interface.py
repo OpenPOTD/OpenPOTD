@@ -252,35 +252,42 @@ class Interface(commands.Cog):
 
         cursor.execute('SELECT rank, score, user_id from rankings where season_id = ? order by rank', (season,))
         rankings = cursor.fetchall()
-        # embed = discord.Embed(title=f'Current rankings for {szn_name}',
-        #                      description='\n'.join((f'{rank[0]}. {rank[1]:.2f} [<@!{rank[2]}>]' for rank in rankings)))
-        menu = dpymenus.PaginatedMenu(ctx)
-        
-        pages = []
-        for i in range(len(rankings) // 20 + 1):
-            page = dpymenus.Page(title=f'{szn_name} rankings - Page {i+1}')
-            scores = '\n'.join([f'{rank}. {score} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20*i:20*i+20]])
-            page.description = scores
-            pages.append(page)
-        menu.add_pages(pages)
-        await menu.open()
+
+        if len(rankings) <= 20:
+            # If there are less than 20 rankings, we don't need a whole menu (in fact dpymenus will throw us an error)
+            embed = discord.Embed(title=f'{szn_name} rankings')
+            scores = '\n'.join([f'{rank}. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings])
+            embed.description = scores
+            await ctx.send(embed=embed)
+        else:
+            pages = []
+            for i in range(len(rankings) // 20 + 1):
+                page = dpymenus.Page(title=f'{szn_name} rankings - Page {i + 1}')
+                scores = '\n'.join(
+                    [f'{rank}. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20 * i:20 * i + 20]])
+                page.description = scores
+                pages.append(page)
+            menu = dpymenus.PaginatedMenu(ctx).set_timeout(60).add_pages(pages).persist_on_close()
+            await menu.open()
 
     async def build_embed(self, problem_id):
-        embed = discord.Embed(title = "PoTD Solves")
+        embed = discord.Embed(title="PoTD Solves")
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT date, weighted_solves, embed_id, channel_id FROM problems WHERE id = ?', (problem_id,))
         potd_information = cursor.fetchall()
-        embed = discord.embed(title = "PoTD solves")
+        embed = discord.embed(title="PoTD solves")
         embed.add_field("Date: " + potd_information[0])
         embed.add_field("Number of Solves: " + potd_information[1])
-        if(potd_information[2] == 0):
-            message = await self.bot.get_channel.send(embed) # TODO: Fix it to make the bot send the dm through the potd channel
+        if (potd_information[2] == 0):
+            message = await self.bot.get_channel.send(
+                embed)  # TODO: Fix it to make the bot send the dm through the potd channel
             message_id = message.id
             channel_id = message.channel
-            cursor.execute("UPDATE problems SET embed_id = ?, channel_id = ? WHERE id = ?", (message_id, channel_id, problem_id))
+            cursor.execute("UPDATE problems SET embed_id = ?, channel_id = ? WHERE id = ?",
+                           (message_id, channel_id, problem_id))
         else:
             pass
-            #TODO: Fix it to make the bot send the dm through the potd channel
+            # TODO: Fix it to make the bot send the dm through the potd channel
 
     @commands.command()
     async def fetch(self, ctx, date_or_id):
