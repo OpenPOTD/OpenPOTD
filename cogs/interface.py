@@ -302,7 +302,7 @@ class Interface(commands.Cog):
         answer_is_correct = correct_answer == answer
 
         # See whether they've solved it before
-        cursor.execute('SELECT exists (select * from solves where solves.user = ? and solves.problem_id = ?',
+        cursor.execute('SELECT exists (select * from solves where solves.user = ? and solves.problem_id = ?)',
                        (ctx.author.id, potd_id))
         solved_before = cursor.fetchall()[0][0]
 
@@ -310,7 +310,7 @@ class Interface(commands.Cog):
         cursor.execute('INSERT or IGNORE into users (discord_id) VALUES (?)', (ctx.author.id,))
 
         # Record an attempt even if they've solved before
-        cursor.execute('INSERT INTO attempts (user_id, potd_id, official, submission, submit_time',
+        cursor.execute('INSERT INTO attempts (user_id, potd_id, official, submission, submit_time) VALUES (?,?,?,?,?)',
                        (ctx.author.id, potd_id, False, answer, datetime.now()))
 
         # Get the number of both official and unofficial attempts
