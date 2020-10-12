@@ -257,7 +257,7 @@ class Interface(commands.Cog):
         if len(rankings) <= 20:
             # If there are less than 20 rankings, we don't need a whole menu (in fact dpymenus will throw us an error)
             embed = discord.Embed(title=f'{szn_name} rankings - Page')
-            scores = '\n'.join([f'{rank}. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20*i:20*i+20]])
+            scores = '\n'.join([f'{rank}. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings])
             embed.description = scores
             await ctx.send(embed)
         else:
