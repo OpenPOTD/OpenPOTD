@@ -314,10 +314,10 @@ class Interface(commands.Cog):
                        (ctx.author.id, potd_id, False, answer, datetime.now()))
 
         # Get the number of both official and unofficial attempts
-        cursor.execute('SELECT COUNT(1) from attempts WHERE user_id = ?, potd_id = ?, official = ?',
+        cursor.execute('SELECT COUNT(1) from attempts WHERE user_id = ? and potd_id = ? and official = ?',
                        (ctx.author.id, potd_id, True))
         official_attempts = cursor.fetchall()[0][0]
-        cursor.execute('SELECT COUNT(1) from attempts WHERE user_id = ?, potd_id = ?, official = ?',
+        cursor.execute('SELECT COUNT(1) from attempts WHERE user_id = ? and potd_id = ? and official = ?',
                        (ctx.author.id, potd_id, False))
         unofficial_attempts = cursor.fetchall()[0][0]
 
