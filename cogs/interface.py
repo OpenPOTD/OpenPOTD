@@ -279,8 +279,6 @@ class Interface(commands.Cog):
         else:
             pass
             #TODO: Fix it to make the bot send the dm through the potd channel
-        
-        
 
 
 def setup(bot: openpotd.OpenPOTD):
