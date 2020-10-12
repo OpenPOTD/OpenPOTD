@@ -253,15 +253,22 @@ class Interface(commands.Cog):
         cursor.execute('SELECT rank, score, user_id from rankings where season_id = ? order by rank', (season,))
         rankings = cursor.fetchall()
         menu = dpymenus.PaginatedMenu(ctx)
-        
-        pages = []
-        for i in range(len(rankings) // 20 + 1):
-            page = dpymenus.Page(title=f'{szn_name} rankings - Page {i+1}')
+
+        if len(rankings) <= 20:
+            # If there are less than 20 rankings, we don't need a whole menu (in fact dpymenus will throw us an error)
+            embed = discord.Embed(title=f'{szn_name} rankings - Page')
             scores = '\n'.join([f'{rank}. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20*i:20*i+20]])
-            page.description = scores
-            pages.append(page)
-        menu.add_pages(pages)
-        await menu.open()
+            embed.description = scores
+            await ctx.send(embed)
+        else:
+            pages = []
+            for i in range(len(rankings) // 20 + 1):
+                page = dpymenus.Page(title=f'{szn_name} rankings - Page {i+1}')
+                scores = '\n'.join([f'{rank}. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20*i:20*i+20]])
+                page.description = scores
+                pages.append(page)
+            menu.add_pages(pages)
+            await menu.open()
 
     async def build_embed(self, problem_id):
         embed = discord.Embed(title = "PoTD Solves")
