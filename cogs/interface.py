@@ -3,9 +3,10 @@ from datetime import datetime
 
 import discord
 from discord.ext import commands
+from discord.message import Message
 
 import openpotd
-
+import dpymenus
 
 # Change this if you want a different algorithm
 def weighted_score(attempts: int):
@@ -130,10 +131,16 @@ class Interface(commands.Cog):
                 return
 
             # We got to record the submission anyway even if it is right or wrong
-            cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time) '
-                           'VALUES (?, ?, ?, ?, ?)',
-                           (message.author.id, potd_id, True, int(message.content), datetime.utcnow()))
-            self.bot.db.commit()
+            try:
+                cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time) '
+                               'VALUES (?, ?, ?, ?, ?)',
+                               (message.author.id, potd_id, True, int(message.content), datetime.utcnow()))
+                self.bot.db.commit()
+            except OverflowError:
+                cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time '
+                               'VALUES (?, ?, ?, ?, ?)',
+                               (message.author.id, potd_id, True, -1000, datetime.utcnow()))
+                self.bot.db.commit()
 
             # Calculate the number of attempts
             cursor.execute('SELECT count(1) from attempts where attempts.potd_id = ? and attempts.user_id = ?',
@@ -155,7 +162,6 @@ class Interface(commands.Cog):
                 # Give them the "solved" role
                 role_id = self.bot.config['solved_role_id']
                 if role_id is not None:
-                    self.logger.warning('Config variable solved_role_id is not set!')
                     for guild in self.bot.guilds:
                         if guild.get_role(role_id) is not None:
                             member = guild.get_member(message.author.id)
@@ -167,6 +173,8 @@ class Interface(commands.Cog):
                             break
                     else:
                         self.logger.error('No guild found with a role matching the id set in solved_role_id!')
+                else:
+                    self.logger.warning('Config variable solved_role_id is not set!')
 
                 # Logged that they solved it
                 self.logger.info(f'User {message.author.id} just solved potd {potd_id}. ')
@@ -242,9 +250,34 @@ class Interface(commands.Cog):
 
         cursor.execute('SELECT rank, score, user_id from rankings where season_id = ? order by rank', (season,))
         rankings = cursor.fetchall()
-        embed = discord.Embed(title=f'Current rankings for {szn_name}',
-                              description='\n'.join((f'{rank[0]}. {rank[1]:.2f} [<@!{rank[2]}>]' for rank in rankings)))
-        await ctx.send(embed=embed)
+        # embed = discord.Embed(title=f'Current rankings for {szn_name}',
+        #                      description='\n'.join((f'{rank[0]}. {rank[1]:.2f} [<@!{rank[2]}>]' for rank in rankings)))
+        menu = dpymenus.PaginatedMenu(ctx)
+        for i in range(len(rankings) // 10):
+            page = dpymenus.Page(title = "Page " + i)
+            for j in range(i):
+                page.add_field(name = rankings[j][0], value = str(rankings[j][1]) + "(" + str(rankings[j][2]) )
+            menu.add_page(page)
+        await menu.open()
+
+    async def build_embed(self, problem_id):
+        embed = discord.Embed(title = "PoTD Solves")
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT date, weighted_solves, embed_id, channel_id FROM problems WHERE id = ?', (problem_id))
+        potd_information = cursor.fetchall()
+        embed = discord.embed(title = "PoTD solves")
+        embed.add_field("Date: " + potd_information[0])
+        embed.add_field("Number of Solves: " + potd_information[1])
+        if(potd_information[2] == 0):
+            message = await self.bot.get_channel.send(embed) # TODO: Fix it to make the bot send the dm through the potd channel
+            message_id = message.id
+            channel_id = message.channel
+            cursor.execute("UPDATE problems SET embed_id = ?, channel_id = ? WHERE id = ?", (message_id, channel_id, problem_id))
+        else:
+            pass
+            #TODO: Fix it to make the bot send the dm through the potd channel
+        
+        
 
 
 def setup(bot: openpotd.OpenPOTD):
