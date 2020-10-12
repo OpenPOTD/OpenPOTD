@@ -278,6 +278,9 @@ class Interface(commands.Cog):
             for i in range(1, len(images)):
                 await ctx.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
 
+        # Log this stuff
+        self.logger.info(f'User {ctx.author.id} requested POTD with date {potd_date} and number {potd_id}. ')
+
     @commands.command()
     async def check(self, ctx, date_or_id, answer: int):
         # Get the POTD id
@@ -326,18 +329,26 @@ class Interface(commands.Cog):
                 # Record that they solved it.
                 cursor.execute('INSERT INTO solves (user, problem_id, num_attempts, official) VALUES (?, ?, ?, ?)',
                                (ctx.author.id, potd_id, official_attempts + unofficial_attempts, False))
-                await ctx.send(f'Nice job! You solved POTD `{potd_id}` after `{official_attempts+unofficial_attempts}` '
-                               f'attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ')
+                await ctx.send(
+                    f'Nice job! You solved POTD `{potd_id}` after `{official_attempts + unofficial_attempts}` '
+                    f'attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ')
             else:
                 # Don't need to record that they solved it.
                 await ctx.send(f'Nice job! However you solved this POTD already. ')
+
+            # Log this stuff
+            self.logger.info(f'[Unofficial] User {ctx.author.id} solved POTD {potd_id}')
         else:
-            await ctx.send(f"Sorry! That's the wrong answer. You've had `{official_attempts+unofficial_attempts}` "
+            await ctx.send(f"Sorry! That's the wrong answer. You've had `{official_attempts + unofficial_attempts}` "
                            f"attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ")
+
+            # Log this stuff
+            self.logger.info(f'[Unofficial] User {ctx.author.id} submitted wrong answer {answer} for POTD {potd_id}. ')
 
         # Delete the message if it's in a guild
         if ctx.guild is not None:
             await ctx.message.delete()
+
 
 def setup(bot: openpotd.OpenPOTD):
     bot.add_cog(Interface(bot))
