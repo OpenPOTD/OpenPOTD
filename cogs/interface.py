@@ -400,14 +400,27 @@ class Interface(commands.Cog):
         cursor = self.bot.db.cursor()
 
         # Retrieve nickname information
-        cursor.execute('SELECT nickname from users where discord_id = ?', (ctx.author.id,))
+        cursor.execute('SELECT nickname, anonymous from users where discord_id = ?', (ctx.author.id,))
         result = cursor.fetchall()
         if len(result) > 0:
             embed.add_field(name='Nickname', value=result[0][0])
+            embed.add_field(name='Anonymous', value=result[1][0])
         else:
             embed.add_field(name='Nickname', value='None')
 
         await ctx.send(embed=embed)
+
+    @commands.command()
+    async def toggle_anon(self, ctx):
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT anonymous from users where discord_id = ?', (ctx.author.id,))
+        result = cursor.fetchall()
+
+        if len(result) == 0:
+            await ctx.send('You are not registered.')
+        else:
+            cursor.execute('UPDATE users SET anonymous = ? WHERE discord_id = ?', (not result, ctx.author.id))
+            self.bot.db.commit()
 
 
 def setup(bot: openpotd.OpenPOTD):

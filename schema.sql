@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS "users" (
 	"discord_id"	INTEGER NOT NULL UNIQUE,
 	"nickname"	TEXT,
+	"anonymous" BOOLEAN,
 	PRIMARY KEY("discord_id")
 );
 CREATE TABLE IF NOT EXISTS "images" (
