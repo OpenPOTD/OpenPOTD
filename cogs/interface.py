@@ -407,6 +407,8 @@ class Interface(commands.Cog):
         else:
             embed.add_field(name='Nickname', value='None')
 
+        await ctx.send(embed=embed)
+
 
 def setup(bot: openpotd.OpenPOTD):
     bot.add_cog(Interface(bot))
