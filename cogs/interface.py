@@ -425,7 +425,7 @@ class Interface(commands.Cog):
         if len(result) == 0:
             await ctx.send('You are not registered.')
         else:
-            cursor.execute('UPDATE users SET anonymous = ? WHERE discord_id = ?', (not result, ctx.author.id))
+            cursor.execute('UPDATE users SET anonymous = ? WHERE discord_id = ?', (not result[0][0], ctx.author.id))
             self.bot.db.commit()
 
 
