@@ -384,7 +384,7 @@ class Interface(commands.Cog):
             await ctx.message.delete()
 
     @commands.command()
-    async def nick(self, ctx, new_nick):
+    async def nick(self, ctx, *, new_nick):
         if len(new_nick) > 32:
             await ctx.send('Nickname is too long!')
             return
