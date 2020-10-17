@@ -383,6 +383,30 @@ class Interface(commands.Cog):
         if ctx.guild is not None:
             await ctx.message.delete()
 
+    @commands.command()
+    async def nick(self, ctx, new_nick):
+        if len(new_nick) > 32:
+            await ctx.send('Nickname is too long!')
+            return
+
+        cursor = self.bot.db.cursor()
+        cursor.execute('INSERT or ignore into users (discord_id) VALUES (?)', (ctx.author.id,))
+        cursor.execute('UPDATE users SET nickname = ? WHERE discord_id = ?', (new_nick, ctx.author.id))
+        self.bot.db.commit()
+
+    @commands.command(name='self')
+    async def userinfo(self, ctx):
+        embed = discord.Embed()
+        cursor = self.bot.db.cursor()
+
+        # Retrieve nickname information
+        cursor.execute('SELECT nickname from users where discord_id = ?', (ctx.author.id,))
+        result = cursor.fetchall()
+        if len(result) > 0:
+            embed.add_field(name='Nickname', value=result[0][0])
+        else:
+            embed.add_field(name='Nickname', value='None')
+
 
 def setup(bot: openpotd.OpenPOTD):
     bot.add_cog(Interface(bot))
