@@ -254,6 +254,25 @@ class Management(commands.Cog):
             await ctx.send(e)
         await ctx.send(str(cursor.fetchall()))
 
+    @commands.command()
+    @commands.is_owner()
+    async def init_nicks(self, ctx):
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT discord_id from users where nickname is NULL')
+        users_to_check = [x[0] for x in cursor.fetchall()]
+
+        to_update = []
+        for user_id in users_to_check:
+            user: discord.User = self.bot.get_user(user_id)
+            if user is not None:
+                to_update.append((user.display_name, user_id))
+            else:
+                to_update.append(('Unknown', user_id))
+
+        cursor.executemany('UPDATE users SET nickname = ? where discord_id = ?', to_update)
+        self.bot.db.commit()
+        await ctx.send('Done!')
+
 
 def setup(bot: openpotd.OpenPOTD):
     bot.add_cog(Management(bot))
