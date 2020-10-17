@@ -410,7 +410,7 @@ class Interface(commands.Cog):
         result = cursor.fetchall()
         if len(result) > 0:
             embed.add_field(name='Nickname', value=result[0][0])
-            embed.add_field(name='Anonymous', value=result[1][0])
+            embed.add_field(name='Anonymous', value=result[0][1])
         else:
             embed.add_field(name='Nickname', value='None')
 
