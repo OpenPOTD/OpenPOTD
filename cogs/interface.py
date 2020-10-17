@@ -4,11 +4,11 @@ from datetime import datetime
 
 import discord
 from discord.ext import commands
-from discord.message import Message
 import dpymenus
 
 import openpotd
 import shared
+
 
 # Change this if you want a different algorithm
 def weighted_score(attempts: int):

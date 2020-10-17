@@ -17,7 +17,9 @@ config = yaml.safe_load(cfgfile)
 
 class OpenPOTD(commands.Bot):
     def __init__(self, prefix):
-        super().__init__(prefix)
+        intents = discord.Intents.default()
+        intents.members = True
+        super().__init__(prefix, intents=intents)
         self.config = config
         self.db = sqlite3.connect('data/data.db')
         logging.basicConfig(level=logging.INFO, format='[%(name)s %(levelname)s] %(message)s')
