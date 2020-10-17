@@ -31,7 +31,8 @@ class Interface(commands.Cog):
             return
         else:
             season_id = ids[0][0]
-        cursor.execute('''INSERT OR IGNORE INTO users (discord_id) VALUES (?)''', (ctx.author.id,))
+        cursor.execute('''INSERT OR IGNORE INTO users (discord_id, nickname, anonymous) VALUES (?, ?, ?)''',
+                       (ctx.author.id, ctx.author.display_name, True))
 
         cursor.execute('''SELECT EXISTS (SELECT 1 from registrations WHERE registrations.user_id = ? 
                             AND registrations.season_id = ?)''', (ctx.author.id, season_id))
@@ -110,7 +111,8 @@ class Interface(commands.Cog):
         correct_answer_list = cursor.fetchall()
 
         # Make sure the user is registered
-        cursor.execute('INSERT or IGNORE into users (discord_id) VALUES (?)', (message.author.id,))
+        cursor.execute('''INSERT OR IGNORE INTO users (discord_id, nickname, anonymous) VALUES (?, ?, ?)''',
+                       (message.author.id, message.author.display_name, True))
         self.bot.db.commit()
 
         if len(correct_answer_list) == 0:
@@ -344,7 +346,8 @@ class Interface(commands.Cog):
         solved_before = cursor.fetchall()[0][0]
 
         # Make sure the user is registered
-        cursor.execute('INSERT or IGNORE into users (discord_id) VALUES (?)', (ctx.author.id,))
+        cursor.execute('''INSERT OR IGNORE INTO users (discord_id, nickname, anonymous) VALUES (?, ?, ?)''',
+                       (ctx.author.id, ctx.author.display_name, True))
 
         # Record an attempt even if they've solved before
         cursor.execute('INSERT INTO attempts (user_id, potd_id, official, submission, submit_time) VALUES (?,?,?,?,?)',
@@ -390,7 +393,8 @@ class Interface(commands.Cog):
             return
 
         cursor = self.bot.db.cursor()
-        cursor.execute('INSERT or ignore into users (discord_id) VALUES (?)', (ctx.author.id,))
+        cursor.execute('''INSERT OR IGNORE INTO users (discord_id, nickname, anonymous) VALUES (?, ?, ?)''',
+                       (ctx.author.id, ctx.author.display_name, True))
         cursor.execute('UPDATE users SET nickname = ? WHERE discord_id = ?', (new_nick, ctx.author.id))
         self.bot.db.commit()
 
