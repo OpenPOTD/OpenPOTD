@@ -386,6 +386,8 @@ class Interface(commands.Cog):
         if ctx.guild is not None:
             await ctx.message.delete()
 
+        self.bot.db.commit()
+
     @commands.command()
     async def nick(self, ctx, *, new_nick):
         if len(new_nick) > 32:
