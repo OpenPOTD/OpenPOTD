@@ -247,10 +247,10 @@ class Management(commands.Cog):
     @commands.check(authorised)
     async def otd_prefix(self, ctx, new_otd_prefix: str = None):
         if new_otd_prefix is None:
-            await ctx.send(f'The current prefix is {self.bot.config["otd_prefix"].upper()}.')
+            await ctx.send(f'The current prefix is {self.bot.config["otd_prefix"]}.')
         else:
-            self.bot.config["otd_prefix"] = new_otd_prefix.lower()
-            await ctx.send(f'Prefix has been changed to {self.bot.config["otd_prefix"].upper()}')
+            self.bot.config["otd_prefix"] = new_otd_prefix.upper()
+            await ctx.send(f'Prefix has been changed to {self.bot.config["otd_prefix"]}')
                            
     @commands.command()
     @commands.is_owner()
