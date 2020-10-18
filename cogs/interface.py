@@ -1,10 +1,13 @@
+import io
 import logging
 from datetime import datetime
 
 import discord
 from discord.ext import commands
+import dpymenus
 
 import openpotd
+import shared
 
 
 # Change this if you want a different algorithm
@@ -28,7 +31,8 @@ class Interface(commands.Cog):
             return
         else:
             season_id = ids[0][0]
-        cursor.execute('''INSERT OR IGNORE INTO users (discord_id) VALUES (?)''', (ctx.author.id,))
+        cursor.execute('''INSERT OR IGNORE INTO users (discord_id, nickname, anonymous) VALUES (?, ?, ?)''',
+                       (ctx.author.id, ctx.author.display_name, True))
 
         cursor.execute('''SELECT EXISTS (SELECT 1 from registrations WHERE registrations.user_id = ? 
                             AND registrations.season_id = ?)''', (ctx.author.id, season_id))
@@ -107,7 +111,8 @@ class Interface(commands.Cog):
         correct_answer_list = cursor.fetchall()
 
         # Make sure the user is registered
-        cursor.execute('INSERT or IGNORE into users (discord_id) VALUES (?)', (message.author.id,))
+        cursor.execute('''INSERT OR IGNORE INTO users (discord_id, nickname, anonymous) VALUES (?, ?, ?)''',
+                       (message.author.id, message.author.display_name, True))
         self.bot.db.commit()
 
         if len(correct_answer_list) == 0:
@@ -249,9 +254,179 @@ class Interface(commands.Cog):
 
         cursor.execute('SELECT rank, score, user_id from rankings where season_id = ? order by rank', (season,))
         rankings = cursor.fetchall()
-        embed = discord.Embed(title=f'Current rankings for {szn_name}',
-                              description='\n'.join((f'{rank[0]}. {rank[1]:.2f} [<@!{rank[2]}>]' for rank in rankings)))
-        await ctx.author.send(embed=embed)
+
+        if len(rankings) <= 20:
+            # If there are less than 20 rankings, we don't need a whole menu (in fact dpymenus will throw us an error)
+            embed = discord.Embed(title=f'{szn_name} rankings')
+            scores = '\n'.join([f'{rank}. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings])
+            embed.description = scores
+            await ctx.send(embed=embed)
+        else:
+            pages = []
+            for i in range(len(rankings) // 20 + 1):
+                page = dpymenus.Page(title=f'{szn_name} rankings - Page {i + 1}')
+                scores = '\n'.join(
+                    [f'{rank}. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20 * i:20 * i + 20]])
+                page.description = scores
+                pages.append(page)
+            menu = dpymenus.PaginatedMenu(ctx).set_timeout(60).add_pages(pages).persist_on_close()
+            await menu.open()
+
+    async def build_embed(self, problem_id):
+        embed = discord.Embed(title="PoTD Solves")
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT date, weighted_solves, embed_id, channel_id FROM problems WHERE id = ?', (problem_id,))
+        potd_information = cursor.fetchall()
+        embed = discord.embed(title="PoTD solves")
+        embed.add_field("Date: " + potd_information[0])
+        embed.add_field("Number of Solves: " + potd_information[1])
+        if (potd_information[2] == 0):
+            message = await self.bot.get_channel.send(
+                embed)  # TODO: Fix it to make the bot send the dm through the potd channel
+            message_id = message.id
+            channel_id = message.channel
+            cursor.execute("UPDATE problems SET embed_id = ?, channel_id = ? WHERE id = ?",
+                           (message_id, channel_id, problem_id))
+        else:
+            pass
+            # TODO: Fix it to make the bot send the dm through the potd channel
+
+    @commands.command()
+    async def fetch(self, ctx, date_or_id):
+        try:
+            potd_id = shared.id_from_date_or_id(date_or_id, self.bot.db, is_public=True)
+        except Exception as e:
+            await ctx.send(e)
+            return
+
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT date from problems where id = ?', (potd_id,))
+        potd_date = cursor.fetchall()[0][0]
+
+        # Display the potd to the user
+        cursor.execute('''SELECT image FROM images WHERE potd_id = ?''', (potd_id,))
+        images = cursor.fetchall()
+        if len(images) == 0:
+            await ctx.send(f'POTD {potd_id} of {potd_date} has no picture attached. ')
+        else:
+            await ctx.send(f'POTD {potd_id} of {potd_date}', file=discord.File(io.BytesIO(images[0][0]),
+                                                                               filename=f'POTD-{potd_id}-0.png'))
+            for i in range(1, len(images)):
+                await ctx.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
+
+        # Log this stuff
+        self.logger.info(f'User {ctx.author.id} requested POTD with date {potd_date} and number {potd_id}. ')
+
+    @commands.command()
+    async def check(self, ctx, date_or_id, answer: int):
+        # Get the POTD id
+        try:
+            potd_id = shared.id_from_date_or_id(date_or_id, self.bot.db, is_public=True)
+        except Exception as e:
+            await ctx.send(e)
+            return
+
+        cursor = self.bot.db.cursor()
+
+        # Check that it's not part of a currently running season.
+        cursor.execute('SELECT name from seasons where latest_potd = ?', (potd_id,))
+        seasons = cursor.fetchall()
+        if len(seasons) > 0:
+            await ctx.send(f"This potd is part of {seasons[0][0]}. Please just DM your answer for this POTD to me. ")
+            return
+
+        # Get the correct answer
+        cursor.execute('SELECT answer from problems where id = ?', (potd_id,))
+        correct_answer = cursor.fetchall()[0][0]
+        answer_is_correct = correct_answer == answer
+
+        # See whether they've solved it before
+        cursor.execute('SELECT exists (select * from solves where solves.user = ? and solves.problem_id = ?)',
+                       (ctx.author.id, potd_id))
+        solved_before = cursor.fetchall()[0][0]
+
+        # Make sure the user is registered
+        cursor.execute('''INSERT OR IGNORE INTO users (discord_id, nickname, anonymous) VALUES (?, ?, ?)''',
+                       (ctx.author.id, ctx.author.display_name, True))
+
+        # Record an attempt even if they've solved before
+        cursor.execute('INSERT INTO attempts (user_id, potd_id, official, submission, submit_time) VALUES (?,?,?,?,?)',
+                       (ctx.author.id, potd_id, False, answer, datetime.now()))
+
+        # Get the number of both official and unofficial attempts
+        cursor.execute('SELECT COUNT(1) from attempts WHERE user_id = ? and potd_id = ? and official = ?',
+                       (ctx.author.id, potd_id, True))
+        official_attempts = cursor.fetchall()[0][0]
+        cursor.execute('SELECT COUNT(1) from attempts WHERE user_id = ? and potd_id = ? and official = ?',
+                       (ctx.author.id, potd_id, False))
+        unofficial_attempts = cursor.fetchall()[0][0]
+
+        if answer_is_correct:
+            if not solved_before:
+                # Record that they solved it.
+                cursor.execute('INSERT INTO solves (user, problem_id, num_attempts, official) VALUES (?, ?, ?, ?)',
+                               (ctx.author.id, potd_id, official_attempts + unofficial_attempts, False))
+                await ctx.send(
+                    f'Nice job! You solved POTD `{potd_id}` after `{official_attempts + unofficial_attempts}` '
+                    f'attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ')
+            else:
+                # Don't need to record that they solved it.
+                await ctx.send(f'Nice job! However you solved this POTD already. ')
+
+            # Log this stuff
+            self.logger.info(f'[Unofficial] User {ctx.author.id} solved POTD {potd_id}')
+        else:
+            await ctx.send(f"Sorry! That's the wrong answer. You've had `{official_attempts + unofficial_attempts}` "
+                           f"attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ")
+
+            # Log this stuff
+            self.logger.info(f'[Unofficial] User {ctx.author.id} submitted wrong answer {answer} for POTD {potd_id}. ')
+
+        # Delete the message if it's in a guild
+        if ctx.guild is not None:
+            await ctx.message.delete()
+
+        self.bot.db.commit()
+
+    @commands.command()
+    async def nick(self, ctx, *, new_nick):
+        if len(new_nick) > 32:
+            await ctx.send('Nickname is too long!')
+            return
+
+        cursor = self.bot.db.cursor()
+        cursor.execute('''INSERT OR IGNORE INTO users (discord_id, nickname, anonymous) VALUES (?, ?, ?)''',
+                       (ctx.author.id, ctx.author.display_name, True))
+        cursor.execute('UPDATE users SET nickname = ? WHERE discord_id = ?', (new_nick, ctx.author.id))
+        self.bot.db.commit()
+
+    @commands.command(name='self')
+    async def userinfo(self, ctx):
+        embed = discord.Embed()
+        cursor = self.bot.db.cursor()
+
+        # Retrieve nickname information
+        cursor.execute('SELECT nickname, anonymous from users where discord_id = ?', (ctx.author.id,))
+        result = cursor.fetchall()
+        if len(result) > 0:
+            embed.add_field(name='Nickname', value=result[0][0])
+            embed.add_field(name='Anonymous', value=result[0][1])
+        else:
+            embed.add_field(name='Nickname', value='None')
+
+        await ctx.send(embed=embed)
+
+    @commands.command()
+    async def toggle_anon(self, ctx):
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT anonymous from users where discord_id = ?', (ctx.author.id,))
+        result = cursor.fetchall()
+
+        if len(result) == 0:
+            await ctx.send('You are not registered.')
+        else:
+            cursor.execute('UPDATE users SET anonymous = ? WHERE discord_id = ?', (not result[0][0], ctx.author.id))
+            self.bot.db.commit()
 
 
 def setup(bot: openpotd.OpenPOTD):
