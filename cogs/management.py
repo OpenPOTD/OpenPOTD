@@ -31,14 +31,14 @@ class Management(commands.Cog):
         self.bot.loop.create_task(self.advance_potd())
 
     async def advance_potd(self):
-        print(f'Advancing POTD at {datetime.now()}')
+        print(f'Advancing {self.bot.config["otd_prefix"]}OTD at {datetime.now()}')
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT problems.id from (seasons left join problems on seasons.running = ? '
                        'and seasons.id = problems.season and problems.date = ? )', (True, str(date.today())))
         result = cursor.fetchall()
         potd_channel = self.bot.get_channel(self.bot.config['potd_channel'])
         if len(result) == 0 or result[0][0] is None:
-            await potd_channel.send('Sorry! We are running late on the potd today. ')
+            await potd_channel.send('Sorry! We are running late on the {self.bot.config["otd_prefix"].lower()}otd today. ')
             return
 
         # Send the potd
@@ -46,9 +46,9 @@ class Management(commands.Cog):
         cursor.execute('SELECT images.image from images where images.potd_id = ?', (potd_id,))
         images = cursor.fetchall()
         if len(images) == 0:
-            await potd_channel.send(f'POTD {potd_id} of {str(date.today())} has no picture attached. ')
+            await potd_channel.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {str(date.today())} has no picture attached. ')
         else:
-            await potd_channel.send(f'POTD {potd_id} of {str(date.today())}',
+            await potd_channel.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {str(date.today())}',
                                     file=discord.File(io.BytesIO(images[0][0]),
                                                       filename=f'POTD-{potd_id}-0.png'))
             for i in range(1, len(images)):
@@ -80,7 +80,7 @@ class Management(commands.Cog):
         self.bot.db.commit()
 
         # Log this
-        self.logger.info(f'Posted POTD {potd_id}. ')
+        self.logger.info(f'Posted {self.bot.config["otd_prefix"]}OTD {potd_id}. ')
 
     @commands.command()
     @commands.check(authorised)
@@ -139,7 +139,7 @@ class Management(commands.Cog):
             try:
                 potd_date = result[0][0]
             except IndexError:
-                await ctx.send('No such potd. ')
+                await ctx.send('No such {self.bot.config["otd_prefix"].lower()}otd. ')
                 return
 
         else:  # User passed in a date
@@ -147,7 +147,7 @@ class Management(commands.Cog):
             cursor.execute('''SELECT id from problems WHERE date = ?''', (potd_date,))
             result = cursor.fetchall()
             if len(result) == 0:
-                await ctx.send('No such POTD found. ')
+                await ctx.send('No such {self.bot.config["otd_prefix"]}OTD found. ')
                 return
             else:
                 potd_id = result[0][0]
@@ -156,9 +156,9 @@ class Management(commands.Cog):
         cursor.execute('''SELECT image FROM images WHERE potd_id = ?''', (potd_id,))
         images = cursor.fetchall()
         if len(images) == 0:
-            await ctx.send(f'POTD {potd_id} of {potd_date} has no picture attached. ')
+            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date} has no picture attached. ')
         else:
-            await ctx.send(f'POTD {potd_id} of {potd_date}', file=discord.File(io.BytesIO(images[0][0]),
+            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date}', file=discord.File(io.BytesIO(images[0][0]),
                                                                                filename=f'POTD-{potd_id}-0.png'))
             for i in range(1, len(images)):
                 await ctx.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
@@ -182,7 +182,7 @@ class Management(commands.Cog):
             if flags[param] is not None:
                 cursor.execute(f'UPDATE problems SET {param} = ? WHERE id = ?', (flags[param], potd))
         self.bot.db.commit()
-        await ctx.send('Updated potd. ')
+        await ctx.send('Updated {self.bot.config["otd_prefix"].lower()}otd. ')
 
     @commands.command()
     @commands.check(authorised)
@@ -195,12 +195,12 @@ class Management(commands.Cog):
 
         result = cursor.fetchall()
         if len(result) == 0:
-            await ctx.send('No such potd. ')
+            await ctx.send('No such {self.bot.config["otd_prefix"].lower()}otd. ')
             return
 
         columns = ['id', 'date', 'season', 'statement',
                    'difficulty', 'weighted_solves', 'base_points', 'answer', 'public', 'source']
-        embed = discord.Embed(title=f'POTD {result[0][0]}')
+        embed = discord.Embed(title=f'{self.bot.config["otd_prefix"]}OTD {result[0][0]}')
         for i in range(len(columns)):
             embed.add_field(name=columns[i], value=result[0][i], inline=False)
         await ctx.send(embed=embed)
