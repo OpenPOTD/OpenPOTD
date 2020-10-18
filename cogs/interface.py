@@ -116,7 +116,7 @@ class Interface(commands.Cog):
         self.bot.db.commit()
 
         if len(correct_answer_list) == 0:
-            await message.channel.send('There is no current POTD to check answers against. ')
+            await message.channel.send(f'There is no current {self.bot.config["otd_prefix"]}OTD to check answers against. ')
             return
         else:
             correct_answer, potd_id, season_id = correct_answer_list[0][0], correct_answer_list[0][1], \
@@ -131,7 +131,7 @@ class Interface(commands.Cog):
             cursor.execute('SELECT exists (select 1 from solves where problem_id = ? and solves.user = ?)',
                            (potd_id, message.author.id))
             if cursor.fetchall()[0][0]:
-                await message.channel.send('You have already solved this potd! ')
+                await message.channel.send(f'You have already solved this {self.bot.config["otd_prefix"].lower()}otd! ')
                 return
 
             # We got to record the submission anyway even if it is right or wrong
@@ -170,9 +170,9 @@ class Interface(commands.Cog):
                         if guild.get_role(role_id) is not None:
                             member = guild.get_member(message.author.id)
                             if member is not None:
-                                await member.add_roles(guild.get_role(role_id), reason='Solved potd')
+                                await member.add_roles(guild.get_role(role_id), reason=f'Solved {self.bot.config["otd_prefix"].lower()}otd')
                             else:
-                                self.logger.warning(f'User {message.author.id} solved the POTD despite not being '
+                                self.logger.warning(f'User {message.author.id} solved the {self.bot.config["otd_prefix"]}OTD despite not being '
                                                     f'in the server. ')
                             break
                     else:
@@ -181,7 +181,7 @@ class Interface(commands.Cog):
                     self.logger.warning('Config variable solved_role_id is not set!')
 
                 # Logged that they solved it
-                self.logger.info(f'User {message.author.id} just solved potd {potd_id}. ')
+                self.logger.info(f'User {message.author.id} just solved {self.bot.config["otd_prefix"].lower()}otd {potd_id}. ')
 
             else:
                 # They got it wrong
@@ -191,7 +191,7 @@ class Interface(commands.Cog):
                 self.refresh(season_id)
 
                 # Log that they didn't solve it
-                self.logger.info(f'User {message.author.id} submitted incorrect answer {answer} for potd {potd_id}. ')
+                self.logger.info(f'User {message.author.id} submitted incorrect answer {answer} for {self.bot.config["otd_prefix"].lower()}otd {potd_id}. ')
 
     @commands.command()
     async def score(self, ctx, season: int = None):
@@ -273,11 +273,11 @@ class Interface(commands.Cog):
             await menu.open()
 
     async def build_embed(self, problem_id):
-        embed = discord.Embed(title="PoTD Solves")
+        embed = discord.Embed(title=f'{self.bot.config["otd_prefix"]}oTD Solves')
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT date, weighted_solves, embed_id, channel_id FROM problems WHERE id = ?', (problem_id,))
         potd_information = cursor.fetchall()
-        embed = discord.embed(title="PoTD solves")
+        embed = discord.embed(title=f'{self.bot.config["otd_prefix"]}oTD solves')
         embed.add_field("Date: " + potd_information[0])
         embed.add_field("Number of Solves: " + potd_information[1])
         if (potd_information[2] == 0):
@@ -307,15 +307,15 @@ class Interface(commands.Cog):
         cursor.execute('''SELECT image FROM images WHERE potd_id = ?''', (potd_id,))
         images = cursor.fetchall()
         if len(images) == 0:
-            await ctx.send(f'POTD {potd_id} of {potd_date} has no picture attached. ')
+            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date} has no picture attached. ')
         else:
-            await ctx.send(f'POTD {potd_id} of {potd_date}', file=discord.File(io.BytesIO(images[0][0]),
+            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date}', file=discord.File(io.BytesIO(images[0][0]),
                                                                                filename=f'POTD-{potd_id}-0.png'))
             for i in range(1, len(images)):
                 await ctx.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
 
         # Log this stuff
-        self.logger.info(f'User {ctx.author.id} requested POTD with date {potd_date} and number {potd_id}. ')
+        self.logger.info(f'User {ctx.author.id} requested {self.bot.config["otd_prefix"]}OTD with date {potd_date} and number {potd_id}. ')
 
     @commands.command()
     async def check(self, ctx, date_or_id, answer: int):
@@ -332,7 +332,7 @@ class Interface(commands.Cog):
         cursor.execute('SELECT name from seasons where latest_potd = ?', (potd_id,))
         seasons = cursor.fetchall()
         if len(seasons) > 0:
-            await ctx.send(f"This potd is part of {seasons[0][0]}. Please just DM your answer for this POTD to me. ")
+            await ctx.send(f"This {self.bot.config["otd_prefix"].lower()}otd is part of {seasons[0][0]}. Please just DM your answer for this {self.bot.config["otd_prefix"]}OTD to me. ")
             return
 
         # Get the correct answer
@@ -367,20 +367,20 @@ class Interface(commands.Cog):
                 cursor.execute('INSERT INTO solves (user, problem_id, num_attempts, official) VALUES (?, ?, ?, ?)',
                                (ctx.author.id, potd_id, official_attempts + unofficial_attempts, False))
                 await ctx.send(
-                    f'Nice job! You solved POTD `{potd_id}` after `{official_attempts + unofficial_attempts}` '
+                    f'Nice job! You solved {self.bot.config["otd_prefix"]}OTD `{potd_id}` after `{official_attempts + unofficial_attempts}` '
                     f'attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ')
             else:
                 # Don't need to record that they solved it.
-                await ctx.send(f'Nice job! However you solved this POTD already. ')
+                await ctx.send(f'Nice job! However you solved this {self.bot.config["otd_prefix"]}OTD already. ')
 
             # Log this stuff
-            self.logger.info(f'[Unofficial] User {ctx.author.id} solved POTD {potd_id}')
+            self.logger.info(f'[Unofficial] User {ctx.author.id} solved {self.bot.config["otd_prefix"]}OTD {potd_id}')
         else:
             await ctx.send(f"Sorry! That's the wrong answer. You've had `{official_attempts + unofficial_attempts}` "
                            f"attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ")
 
             # Log this stuff
-            self.logger.info(f'[Unofficial] User {ctx.author.id} submitted wrong answer {answer} for POTD {potd_id}. ')
+            self.logger.info(f'[Unofficial] User {ctx.author.id} submitted wrong answer {answer} for {self.bot.config["otd_prefix"]}OTD {potd_id}. ')
 
         # Delete the message if it's in a guild
         if ctx.guild is not None:
