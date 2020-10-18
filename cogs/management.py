@@ -14,7 +14,6 @@ import openpotd
 
 authorised_set = set()
 
-
 def authorised(ctx):
     return ctx.author.id in authorised_set
 
@@ -243,7 +242,16 @@ class Management(commands.Cog):
             self.logger.info(f'Ended season with id {season}. ')
         else:
             await ctx.send(f'Season {season} already stopped!')
-
+            
+    @commands.command()
+    @commands.check(authorised)
+    async def otd_prefix(self, ctx, new_otd_prefix: str = None):
+        if new_otd_prefix is None:
+            await ctx.send(f'The current prefix is {self.bot.config["otd_prefix"].upper()}.')
+        else:
+            self.bot.config["otd_prefix"] = new_otd_prefix.lower()
+            await ctx.send(f'Prefix has been changed to {self.bot.config["otd_prefix"].upper()}')
+                           
     @commands.command()
     @commands.is_owner()
     async def execute_sql(self, ctx, *, sql):
