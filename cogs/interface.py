@@ -332,7 +332,8 @@ class Interface(commands.Cog):
         cursor.execute('SELECT name from seasons where latest_potd = ?', (potd_id,))
         seasons = cursor.fetchall()
         if len(seasons) > 0:
-            await ctx.send(f"This {self.bot.config["otd_prefix"].lower()}otd is part of {seasons[0][0]}. Please just DM your answer for this {self.bot.config["otd_prefix"]}OTD to me. ")
+            await ctx.send(f'This {self.bot.config["otd_prefix"].lower()}otd is part of {seasons[0][0]}. 
+                           f'Please just DM your answer for this {self.bot.config["otd_prefix"]}OTD to me. ')
             return
 
         # Get the correct answer
