@@ -21,7 +21,7 @@ authorised:
 solved_role_id:
 
 # ?OTD
-otd_prefix: "p"
+otd_prefix: "P"
 
 # Cogs that need to be loaded with the bot
 cogs:
