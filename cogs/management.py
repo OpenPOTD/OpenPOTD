@@ -39,7 +39,7 @@ class Management(commands.Cog):
         result = cursor.fetchall()
         potd_channel = self.bot.get_channel(self.bot.config['potd_channel'])
         if len(result) == 0 or result[0][0] is None:
-            await potd_channel.send('Sorry! We are running late on the {self.bot.config["otd_prefix"].lower()}otd today. ')
+            await potd_channel.send(f'Sorry! We are running late on the {self.bot.config["otd_prefix"].lower()}otd today. ')
             return
 
         # Send the potd
@@ -140,7 +140,7 @@ class Management(commands.Cog):
             try:
                 potd_date = result[0][0]
             except IndexError:
-                await ctx.send('No such {self.bot.config["otd_prefix"].lower()}otd. ')
+                await ctx.send(f'No such {self.bot.config["otd_prefix"].lower()}otd. ')
                 return
 
         else:  # User passed in a date
@@ -148,7 +148,7 @@ class Management(commands.Cog):
             cursor.execute('''SELECT id from problems WHERE date = ?''', (potd_date,))
             result = cursor.fetchall()
             if len(result) == 0:
-                await ctx.send('No such {self.bot.config["otd_prefix"]}OTD found. ')
+                await ctx.send(f'No such {self.bot.config["otd_prefix"]}OTD found. ')
                 return
             else:
                 potd_id = result[0][0]
@@ -183,7 +183,7 @@ class Management(commands.Cog):
             if flags[param] is not None:
                 cursor.execute(f'UPDATE problems SET {param} = ? WHERE id = ?', (flags[param], potd))
         self.bot.db.commit()
-        await ctx.send('Updated {self.bot.config["otd_prefix"].lower()}otd. ')
+        await ctx.send(f'Updated {self.bot.config["otd_prefix"].lower()}otd. ')
 
     @commands.command()
     @commands.check(authorised)
@@ -196,7 +196,7 @@ class Management(commands.Cog):
 
         result = cursor.fetchall()
         if len(result) == 0:
-            await ctx.send('No such {self.bot.config["otd_prefix"].lower()}otd. ')
+            await ctx.send(f'No such {self.bot.config["otd_prefix"].lower()}otd. ')
             return
 
         columns = ['id', 'date', 'season', 'statement',
