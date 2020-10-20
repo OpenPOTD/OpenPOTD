@@ -446,6 +446,9 @@ class Interface(commands.Cog):
         if ctx.guild is not None:
             await ctx.message.delete()
 
+        # Still should refresh the embed
+        await self.update_embed(potd_id)
+
         self.bot.db.commit()
 
     @commands.command()
