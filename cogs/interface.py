@@ -87,8 +87,38 @@ class Interface(commands.Cog):
         # Commit
         self.bot.db.commit()
 
-    def refresh(self, season: int):
+    def update_embed(self, potd_id: int):
+        # Find the message ID in the database
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT stats_message_id from problems where problems.id = ?', (potd_id,))
+        result = cursor.fetchall()
+        if len(cursor.fetchall()) == 0:
+            self.logger.error(f'No problem with id {potd_id}. Failed to refresh. ')
+            return
+        message_id = result[0][0]
+        if message_id is None:
+            self.logger.warning(f'No stats message registered for potd {potd_id}. ')
+            return
+
+        # Find the correct channel
+        channel = self.bot.get_channel(self.bot.config['potd_channel'])
+        if channel is None:
+            self.logger.error(f'Could not find potd_channel {self.bot.config["potd_channel"]}')
+            return
+        message = await channel.fetch_message(message_id)
+
+        # Construct the new embed
+        new_embed = self.build_embed(potd_id, False)
+
+        # Update the message
+        await message.edit(embed=new_embed)
+
+    def refresh(self, season: int, potd_id: int):
+        # Update the rankings in the db
         self.update_rankings(season)
+
+        # Update the embed showing stats
+        self.update_embed(potd_id)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -116,7 +146,8 @@ class Interface(commands.Cog):
         self.bot.db.commit()
 
         if len(correct_answer_list) == 0:
-            await message.channel.send(f'There is no current {self.bot.config["otd_prefix"]}OTD to check answers against. ')
+            await message.channel.send(
+                f'There is no current {self.bot.config["otd_prefix"]}OTD to check answers against. ')
             return
         else:
             correct_answer, potd_id, season_id = correct_answer_list[0][0], correct_answer_list[0][1], \
@@ -158,7 +189,7 @@ class Interface(commands.Cog):
                 self.bot.db.commit()
 
                 # Recalculate scoreboard
-                self.refresh(season_id)
+                self.refresh(season_id, potd_id)
 
                 # Alert user that they got the question correct
                 await message.channel.send(f'Thank you! You solved the problem after {num_attempts} attempts. ')
@@ -170,10 +201,12 @@ class Interface(commands.Cog):
                         if guild.get_role(role_id) is not None:
                             member = guild.get_member(message.author.id)
                             if member is not None:
-                                await member.add_roles(guild.get_role(role_id), reason=f'Solved {self.bot.config["otd_prefix"].lower()}otd')
+                                await member.add_roles(guild.get_role(role_id),
+                                                       reason=f'Solved {self.bot.config["otd_prefix"].lower()}otd')
                             else:
-                                self.logger.warning(f'User {message.author.id} solved the {self.bot.config["otd_prefix"]}OTD despite not being '
-                                                    f'in the server. ')
+                                self.logger.warning(
+                                    f'User {message.author.id} solved the {self.bot.config["otd_prefix"]}OTD despite not being '
+                                    f'in the server. ')
                             break
                     else:
                         self.logger.error('No guild found with a role matching the id set in solved_role_id!')
@@ -181,17 +214,19 @@ class Interface(commands.Cog):
                     self.logger.warning('Config variable solved_role_id is not set!')
 
                 # Logged that they solved it
-                self.logger.info(f'User {message.author.id} just solved {self.bot.config["otd_prefix"].lower()}otd {potd_id}. ')
+                self.logger.info(
+                    f'User {message.author.id} just solved {self.bot.config["otd_prefix"].lower()}otd {potd_id}. ')
 
             else:
                 # They got it wrong
                 await message.channel.send(f'You did not solve this problem! Number of attempts: `{num_attempts}`. ')
 
                 # Recalculate stuff anyway
-                self.refresh(season_id)
+                self.refresh(season_id, potd_id)
 
                 # Log that they didn't solve it
-                self.logger.info(f'User {message.author.id} submitted incorrect answer {answer} for {self.bot.config["otd_prefix"].lower()}otd {potd_id}. ')
+                self.logger.info(
+                    f'User {message.author.id} submitted incorrect answer {answer} for {self.bot.config["otd_prefix"].lower()}otd {potd_id}. ')
 
     @commands.command()
     async def score(self, ctx, season: int = None):
@@ -272,24 +307,31 @@ class Interface(commands.Cog):
             menu = dpymenus.PaginatedMenu(ctx).set_timeout(60).add_pages(pages).persist_on_close()
             await menu.open()
 
-    async def build_embed(self, problem_id):
-        embed = discord.Embed(title=f'{self.bot.config["otd_prefix"]}oTD Solves')
+    async def build_embed(self, problem_id, full_stats: bool):
         cursor = self.bot.db.cursor()
-        cursor.execute('SELECT date, weighted_solves, embed_id, channel_id FROM problems WHERE id = ?', (problem_id,))
+        cursor.execute('SELECT date, season, difficulty, weighted_solves, base_points where '
+                       'problems.id = ? and problems.public = ?', (problem_id, True))
         potd_information = cursor.fetchall()
-        embed = discord.embed(title=f'{self.bot.config["otd_prefix"]}oTD solves')
-        embed.add_field("Date: " + potd_information[0])
-        embed.add_field("Number of Solves: " + potd_information[1])
-        if (potd_information[2] == 0):
-            message = await self.bot.get_channel.send(
-                embed)  # TODO: Fix it to make the bot send the dm through the potd channel
-            message_id = message.id
-            channel_id = message.channel
-            cursor.execute("UPDATE problems SET embed_id = ?, channel_id = ? WHERE id = ?",
-                           (message_id, channel_id, problem_id))
-        else:
-            pass
-            # TODO: Fix it to make the bot send the dm through the potd channel
+        if len(potd_information) == 0:
+            raise Exception('No such potd available.')
+
+        cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (problem_id, True))
+        official_solves = cursor.fetchall()[0][0]
+        cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (problem_id, False))
+        unofficial_solves = cursor.fetchall()[0][0]
+
+        embed = discord.Embed(title=f'{self.bot.config["otd_prefix"]}oTD {problem_id} Stats')
+
+        if full_stats:
+            embed.add_field(name='Date', value=potd_information[0])
+            embed.add_field(name='Season', value=potd_information[1])
+
+        embed.add_field(name='Difficulty', value=potd_information[2])
+        embed.add_field(name='Weighted Solves', value=potd_information[3])
+        embed.add_field(name='Base Points', value=potd_information[4])
+        embed.add_field(name='Solves (official)', value=official_solves)
+        embed.add_field(name='Solves (unofficial)', value=unofficial_solves)
+        return embed
 
     @commands.command()
     async def fetch(self, ctx, date_or_id):
@@ -309,13 +351,15 @@ class Interface(commands.Cog):
         if len(images) == 0:
             await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date} has no picture attached. ')
         else:
-            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date}', file=discord.File(io.BytesIO(images[0][0]),
-                                                                               filename=f'POTD-{potd_id}-0.png'))
+            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date}',
+                           file=discord.File(io.BytesIO(images[0][0]),
+                                             filename=f'POTD-{potd_id}-0.png'))
             for i in range(1, len(images)):
                 await ctx.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
 
         # Log this stuff
-        self.logger.info(f'User {ctx.author.id} requested {self.bot.config["otd_prefix"]}OTD with date {potd_date} and number {potd_id}. ')
+        self.logger.info(
+            f'User {ctx.author.id} requested {self.bot.config["otd_prefix"]}OTD with date {potd_date} and number {potd_id}. ')
 
     @commands.command()
     async def check(self, ctx, date_or_id, answer: int):
@@ -381,7 +425,9 @@ class Interface(commands.Cog):
                            f"attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ")
 
             # Log this stuff
-            self.logger.info(f'[Unofficial] User {ctx.author.id} submitted wrong answer {answer} for {self.bot.config["otd_prefix"]}OTD {potd_id}. ')
+            self.logger.info(
+                f'[Unofficial] User {ctx.author.id} submitted wrong answer {answer} for '
+                f'{self.bot.config["otd_prefix"]}OTD {potd_id}. ')
 
         # Delete the message if it's in a guild
         if ctx.guild is not None:
