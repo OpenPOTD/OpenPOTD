@@ -99,12 +99,12 @@ class Interface(commands.Cog):
         # Commit
         self.bot.db.commit()
 
-    def update_embed(self, potd_id: int):
+    async def update_embed(self, potd_id: int):
         # Find the message ID in the database
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT stats_message_id from problems where problems.id = ?', (potd_id,))
         result = cursor.fetchall()
-        if len(cursor.fetchall()) == 0:
+        if len(result) == 0:
             self.logger.error(f'No problem with id {potd_id}. Failed to refresh. ')
             return
         message_id = result[0][0]
@@ -130,7 +130,7 @@ class Interface(commands.Cog):
         self.update_rankings(season, potd_id)
 
         # Update the embed showing stats
-        self.update_embed(potd_id)
+        self.bot.loop.create_task(self.update_embed(potd_id))
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -319,13 +319,14 @@ class Interface(commands.Cog):
             menu = dpymenus.PaginatedMenu(ctx).set_timeout(60).add_pages(pages).persist_on_close()
             await menu.open()
 
-    async def build_embed(self, problem_id, full_stats: bool):
+    def build_embed(self, problem_id, full_stats: bool):
         cursor = self.bot.db.cursor()
-        cursor.execute('SELECT date, season, difficulty, weighted_solves, base_points where '
+        cursor.execute('SELECT date, season, difficulty, weighted_solves, base_points from problems where '
                        'problems.id = ? and problems.public = ?', (problem_id, True))
-        potd_information = cursor.fetchall()
-        if len(potd_information) == 0:
+        result = cursor.fetchall()
+        if len(result) == 0:
             raise Exception('No such potd available.')
+        potd_information = result[0]
 
         cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (problem_id, True))
         official_solves = cursor.fetchall()[0][0]
@@ -339,8 +340,8 @@ class Interface(commands.Cog):
             embed.add_field(name='Season', value=potd_information[1])
 
         embed.add_field(name='Difficulty', value=potd_information[2])
-        embed.add_field(name='Weighted Solves', value=potd_information[3])
-        embed.add_field(name='Base Points', value=potd_information[4])
+        embed.add_field(name='Weighted Solves', value=f'{potd_information[3]:.2f}')
+        embed.add_field(name='Base Points', value=f'{potd_information[4]:.2f}')
         embed.add_field(name='Solves (official)', value=official_solves)
         embed.add_field(name='Solves (unofficial)', value=unofficial_solves)
         return embed
