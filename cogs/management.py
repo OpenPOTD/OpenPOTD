@@ -33,7 +33,7 @@ class Management(commands.Cog):
     async def advance_potd(self):
         print(f'Advancing {self.bot.config["otd_prefix"]}OTD at {datetime.now()}')
         cursor = self.bot.db.cursor()
-        cursor.execute('SELECT problems.id from (seasons left join problems on seasons.running = ? '
+        cursor.execute('SELECT problems.id, difficulty from (seasons left join problems on seasons.running = ? '
                        'and seasons.id = problems.season and problems.date = ? ) where problems.id IS NOT NULL',
                        (True, str(date.today())))
         result = cursor.fetchall()
@@ -55,6 +55,18 @@ class Management(commands.Cog):
             for i in range(1, len(images)):
                 await potd_channel.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
         await potd_channel.send(f'DM your answers to me! ')
+
+        # Construct embed and send
+        embed = discord.Embed(title=f'{self.bot.config["otd_prefix"]}oTD {potd_id} Stats')
+        embed.add_field(name='Difficulty', value=result[0][1])
+        embed.add_field(name='Weighted Solves', value='0')
+        embed.add_field(name='Base Points', value='0')
+        embed.add_field(name='Solves (official)', value='0')
+        embed.add_field(name='Solves (unofficial)', value='0')
+        stats_message = await potd_channel.send(embed=embed)
+
+        # Update stats embed in db
+        cursor.execute('UPDATE problems SET stats_message_id = ? WHERE problems.id = ?', (stats_message.id, potd_id))
 
         # Advance the season
         cursor.execute('SELECT season FROM problems WHERE id = ?', (potd_id,))
