@@ -46,7 +46,7 @@ class Interface(commands.Cog):
             await ctx.send(f"Registered you for {season}. ")
         self.bot.db.commit()
 
-    def update_rankings(self, season: int):
+    def update_rankings(self, season: int, potd_id: int = -1):
         cursor = self.bot.db.cursor()
 
         # Get all solves this season
@@ -76,6 +76,18 @@ class Interface(commands.Cog):
 
         # Log stuff
         self.logger.info('Updating rankings')
+
+        if potd_id == -1:
+            # Then we shall update all the potds
+            cursor.executemany('UPDATE problems SET weighted_solves = ?, base_points = ? WHERE problems.id = ?',
+                               [(weighted_attempts[i], problem_points[i], i) for i in weighted_attempts])
+        else:
+            # Only update the specified potd
+            if potd_id in weighted_attempts:
+                cursor.execute('UPDATE problems SET weighted_solves = ?, base_points = ? WHERE problems.id = ?',
+                               (weighted_attempts[potd_id], problem_points[potd_id], potd_id))
+            else:
+                self.logger.error(f'No potd with id {potd_id} present. Cannot refresh stats [update_rankings]')
 
         # Prepare data to be put into the db
         total_score_list = [(i, total_score[i]) for i in total_score]
@@ -115,7 +127,7 @@ class Interface(commands.Cog):
 
     def refresh(self, season: int, potd_id: int):
         # Update the rankings in the db
-        self.update_rankings(season)
+        self.update_rankings(season, potd_id)
 
         # Update the embed showing stats
         self.update_embed(potd_id)
