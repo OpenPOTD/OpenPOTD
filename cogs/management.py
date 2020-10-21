@@ -54,7 +54,13 @@ class Management(commands.Cog):
                                                       filename=f'POTD-{potd_id}-0.png'))
             for i in range(1, len(images)):
                 await potd_channel.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
-        await potd_channel.send(f'DM your answers to me! ')
+
+        potd_role_id = self.bot.config['ping_role_id']
+        if potd_role_id is not None:
+            await potd_channel.send(f'DM your answers to me! <@!{potd_role_id}')
+        else:
+            await potd_channel.send(f'DM your answers to me!')
+            self.logger.warning('Config variable ping_role_id is not set! ')
 
         # Construct embed and send
         embed = discord.Embed(title=f'{self.bot.config["otd_prefix"]}oTD {potd_id} Stats')
