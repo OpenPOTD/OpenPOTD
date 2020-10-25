@@ -14,6 +14,7 @@ import openpotd
 
 authorised_set = set()
 
+
 def authorised(ctx):
     return ctx.author.id in authorised_set
 
@@ -33,23 +34,34 @@ class Management(commands.Cog):
     async def advance_potd(self):
         print(f'Advancing {self.bot.config["otd_prefix"]}OTD at {datetime.now()}')
         cursor = self.bot.db.cursor()
-        cursor.execute('SELECT problems.id, difficulty from (seasons left join problems on seasons.running = ? '
-                       'and seasons.id = problems.season and problems.date = ? ) where problems.id IS NOT NULL',
+        cursor.execute('SELECT problems.id, difficulty, seasons.name, seasons.id from (seasons left join problems on '
+                       'seasons.running = ? and seasons.id = problems.season and problems.date = ? ) where '
+                       'problems.id IS NOT NULL',
                        (True, str(date.today())))
         result = cursor.fetchall()
         potd_channel = self.bot.get_channel(self.bot.config['potd_channel'])
         if len(result) == 0 or result[0][0] is None:
-            await potd_channel.send(f'Sorry! We are running late on the {self.bot.config["otd_prefix"].lower()}otd today. ')
+            await potd_channel.send(
+                f'Sorry! We are running late on the {self.bot.config["otd_prefix"].lower()}otd today. ')
             return
+
+        # Get the number of the problem in that season
+        cursor.execute('SELECT COUNT(1) from problems where problems.season = ? and date(problems.date) < date(?)',
+                       (result[0][3], str(date.today())))
+        problem_number = cursor.fetchall()[0][0]
 
         # Send the potd
         potd_id = result[0][0]
+        season_name = result[0][2]
         cursor.execute('SELECT images.image from images where images.potd_id = ?', (potd_id,))
         images = cursor.fetchall()
         if len(images) == 0:
-            await potd_channel.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {str(date.today())} has no picture attached. ')
+            await potd_channel.send(f'**{season_name} - {self.bot.config["otd_prefix"]}{problem_number}** '
+                                    f'[No Picture]')
+            # Should probably warn?
+            self.logger.warning(f'No picture linked to potd {potd_id} just posted. ')
         else:
-            await potd_channel.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {str(date.today())}',
+            await potd_channel.send(f'**{season_name} - {self.bot.config["otd_prefix"]}{problem_number}** ',
                                     file=discord.File(io.BytesIO(images[0][0]),
                                                       filename=f'POTD-{potd_id}-0.png'))
             for i in range(1, len(images)):
@@ -177,8 +189,9 @@ class Management(commands.Cog):
         if len(images) == 0:
             await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date} has no picture attached. ')
         else:
-            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date}', file=discord.File(io.BytesIO(images[0][0]),
-                                                                               filename=f'POTD-{potd_id}-0.png'))
+            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date}',
+                           file=discord.File(io.BytesIO(images[0][0]),
+                                             filename=f'POTD-{potd_id}-0.png'))
             for i in range(1, len(images)):
                 await ctx.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
 
@@ -261,7 +274,7 @@ class Management(commands.Cog):
             self.logger.info(f'Ended season with id {season}. ')
         else:
             await ctx.send(f'Season {season} already stopped!')
-            
+
     @commands.command()
     @commands.check(authorised)
     async def otd_prefix(self, ctx, new_otd_prefix: str = None):
@@ -270,7 +283,7 @@ class Management(commands.Cog):
         else:
             self.bot.config["otd_prefix"] = new_otd_prefix.upper()
             await ctx.send(f'OTD prefix has been changed to {self.bot.config["otd_prefix"]}')
-                           
+
     @commands.command()
     @commands.is_owner()
     async def execute_sql(self, ctx, *, sql):
