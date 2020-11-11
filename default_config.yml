@@ -11,17 +11,8 @@ base_points: 1000
 # Scheduled posting time of POTDs
 posting_time:
 
-# Channel to post the POTDs in by default.
-potd_channel:
-
 # Who's authorised to use bot commands?
 authorised:
-
-# What's the ID of the role to ping?
-ping_role_id:
-
-# What's the ID of the role given to people who've solved each problem?
-solved_role_id:
 
 # ?OTD
 otd_prefix: "P"
