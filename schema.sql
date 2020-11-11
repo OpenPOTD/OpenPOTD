@@ -1,9 +1,3 @@
-CREATE TABLE IF NOT EXISTS "users" (
-	"discord_id"	INTEGER NOT NULL UNIQUE,
-	"nickname"	TEXT,
-	"anonymous" BOOLEAN,
-	PRIMARY KEY("discord_id")
-);
 CREATE TABLE IF NOT EXISTS "images" (
 	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 	"potd_id"	INTEGER,
@@ -27,21 +21,6 @@ CREATE TABLE IF NOT EXISTS "ratings" (
 	"rating"	INTEGER,
 	FOREIGN KEY("userid") REFERENCES "users"("discord_id"),
 	FOREIGN KEY("problemid") REFERENCES "problems"("id")
-);
-CREATE TABLE IF NOT EXISTS "problems" (
-	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-	"date"	DATE NOT NULL,
-	"season"	INTEGER NOT NULL,
-	"statement"	TEXT NOT NULL,
-	"difficulty"	INTEGER,
-	"weighted_solves"	INTEGER NOT NULL DEFAULT 0,
-	"base_points"	INTEGER NOT NULL DEFAULT 0,
-	"answer"	INTEGER NOT NULL,
-	"public"	BOOLEAN,
-	"source"    TEXT,
-	"embed_id" INTEGER DEFAULT 0,
-	"channel_id" INTEGER DEFAULT 0,
-	FOREIGN KEY("season") REFERENCES "seasons"("id")
 );
 CREATE TABLE IF NOT EXISTS "seasons" (
 	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -68,4 +47,33 @@ CREATE TABLE IF NOT EXISTS "rankings" (
 	UNIQUE ("season_id", "user_id")
 	FOREIGN KEY("user_id") REFERENCES "users"("discord_id"),
 	FOREIGN KEY("season_id") REFERENCES "seasons"("id")
+);
+CREATE TABLE IF NOT EXISTS "users" (
+	"discord_id"	INTEGER NOT NULL UNIQUE,
+	"nickname"	TEXT,
+	"anonymous"	BOOLEAN,
+	PRIMARY KEY("discord_id")
+);
+CREATE TABLE IF NOT EXISTS "problems" (
+	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"date"	DATE NOT NULL,
+	"season"	INTEGER NOT NULL,
+	"statement"	TEXT NOT NULL,
+	"difficulty"	INTEGER,
+	"weighted_solves"	INTEGER NOT NULL DEFAULT 0,
+	"base_points"	INTEGER NOT NULL DEFAULT 0,
+	"answer"	INTEGER NOT NULL,
+	"public"	BOOLEAN,
+	"source"	TEXT,
+	"stats_message_id"	INTEGER,
+	FOREIGN KEY("season") REFERENCES "seasons"("id")
+);
+CREATE TABLE IF NOT EXISTS "config" (
+	"server_id"	INTEGER,
+	"potd_channel"	INTEGER,
+	"ping_role_id"	INTEGER,
+	"solved_role_id"	INTEGER,
+	"otd_prefix"	TEXT,
+	"command_prefix"	TEXT,
+	PRIMARY KEY("server_id")
 );
