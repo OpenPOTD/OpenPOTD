@@ -2,6 +2,7 @@ import re
 
 import discord
 from discord.ext import commands
+from discord.ext.commands import has_permissions
 
 import openpotd
 
@@ -16,7 +17,7 @@ class ServerConfig(commands.Cog):
 
     @commands.check(in_guild)
     @commands.command(brief='Prints configuration for this server')
-    def config(self, ctx: commands.Context):
+    async def config(self, ctx: commands.Context):
         cursor = self.bot.db.cursor()
         server_id = ctx.guild.id
 
@@ -27,16 +28,17 @@ class ServerConfig(commands.Cog):
             await ctx.send('No config found! Use init to initialise your server\'s configuration. ')
         else:
             embed = discord.Embed()
-            embed.description = f'`1. potd_channel:` {result[1]} [<#{result[1]}>]' \
-                                f'`2. ping_role_id:` {result[2]} [<@&{result[2]}>]' \
-                                f'`3. solved_role_id:` {result[3]} [<@&{result[3]}>]' \
-                                f'`4. otd_prefix:` {result[4]}' \
-                                f'`5. command_prefix:` {result[5]}'
+            result = result[0]
+            embed.description = f'`1. potd_channel:` {result[1]} [<#{result[1]}>]\n' \
+                                f'`2. ping_role_id:` {result[2]} [<@&{result[2]}>]\n' \
+                                f'`3. solved_role_id:` {result[3]} [<@&{result[3]}>]\n' \
+                                f'`4. otd_prefix:` {result[4]}\n' \
+                                f'`5. command_prefix:` {result[5]}\n'
             await ctx.send(embed=embed)
 
     @commands.check(in_guild)
     @commands.command(brief='Initialises the configuration (note this overwrites previous configuration)', name='init')
-    def init_cfg(self, ctx: commands.Context):
+    async def init_cfg(self, ctx: commands.Context):
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT exists (select * from config where server_id = ?)', (ctx.guild.id,))
 
@@ -84,46 +86,44 @@ class ServerConfig(commands.Cog):
         self.bot.db.commit()
 
     @commands.check(in_guild)
-    @commands.command(brief='Sets a config variable (use the config variable number printed with config)')
-    async def set(self, ctx, var: int, new):
-        cursor = self.bot.db.cursor()
-        if var not in range(1, 6):
-            await ctx.send('Invalid config variable!')
-            return
-
-        if var == 1:
-            if new in [channel.id for channel in ctx.guild.text_channels]:
-                cursor.execute('UPDATE config SET potd_channel = ? WHERE server_id = ?', (new, ctx.guild.id))
-                self.bot.db.commit()
-                await ctx.send('Set successfully!')
-                return
-            else:
-                await ctx.send('No such channel! Please enter the ID of ')
-
+    @has_permissions(manage_guild=True)
+    @commands.command(brief='Sets the potd channel')
     async def potd_channel(self, ctx, new: discord.TextChannel):
         cursor = self.bot.db.cursor()
         cursor.execute('UPDATE config SET potd_channel = ? WHERE server_id = ?', (new.id, ctx.guild.id))
         self.bot.db.commit()
         await ctx.send('Set successfully!')
 
+    @commands.check(in_guild)
+    @has_permissions(manage_guild=True)
+    @commands.command(brief='Sets the role to ping')
     async def ping_role(self, ctx, new: discord.Role):
         cursor = self.bot.db.cursor()
         cursor.execute('UPDATE config SET ping_role_id = ? WHERE server_id = ?', (new.id, ctx.guild.id))
         self.bot.db.commit()
         await ctx.send('Set successfully!')
 
+    @commands.check(in_guild)
+    @has_permissions(manage_guild=True)
+    @commands.command(brief='Sets the role contestants get after solving the POTD')
     async def solved_role(self, ctx, new: discord.Role):
         cursor = self.bot.db.cursor()
         cursor.execute('UPDATE config SET solved_role_id = ? WHERE server_id = ?', (new.id, ctx.guild.id))
         self.bot.db.commit()
         await ctx.send('Set successfully!')
 
+    @commands.check(in_guild)
+    @has_permissions(manage_guild=True)
+    @commands.command(brief='Sets the OTD prefix (some people like calling it a "QOTD" rather than a "POTD")')
     async def otd_prefix(self, ctx, new):
         cursor = self.bot.db.cursor()
         cursor.execute('UPDATE config SET otd_prefix = ? WHERE server_id = ?', (new, ctx.guild.id))
         self.bot.db.commit()
         await ctx.send('Set successfully!')
 
+    @commands.check(in_guild)
+    @has_permissions(manage_guild=True)
+    @commands.command(brief='Sets the server command prefix')
     async def command_prefix(self, ctx, new):
         cursor = self.bot.db.cursor()
         openpotd.prefixes[ctx.guild.id] = new

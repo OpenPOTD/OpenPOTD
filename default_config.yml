@@ -21,3 +21,4 @@ otd_prefix: "P"
 cogs:
   - cogs.management
   - cogs.interface
+  - cogs.serverconfig

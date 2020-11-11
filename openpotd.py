@@ -17,9 +17,9 @@ config = yaml.safe_load(cfgfile)
 prefixes = {}
 
 
-def get_prefix(message: discord.Message):
+def get_prefix(bot, message: discord.Message):
     if message.guild is None or message.guild.id not in prefixes:
-        return config['otd_prefix']
+        return config['prefix']
     else:
         return prefixes[message.guild.id]
 
@@ -40,6 +40,12 @@ class OpenPOTD(commands.Bot):
                 ))
         except IOError:
             self.blacklist = []
+
+        # Populate prefixes
+        cursor = self.db.cursor()
+        cursor.execute('SELECT server_id, command_prefix FROM config WHERE command_prefix IS NOT NULL')
+        global prefixes
+        prefixes = {x[0]: x[1] for x in cursor.fetchall()}
 
     async def on_ready(self):
         self.logger.info('Connected to Discord')

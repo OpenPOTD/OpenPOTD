@@ -261,15 +261,6 @@ class Management(commands.Cog):
             self.logger.info(f'Ended season with id {season}. ')
         else:
             await ctx.send(f'Season {season} already stopped!')
-            
-    @commands.command()
-    @commands.check(authorised)
-    async def otd_prefix(self, ctx, new_otd_prefix: str = None):
-        if new_otd_prefix is None:
-            await ctx.send(f'The current OTD prefix is {self.bot.config["otd_prefix"]}.')
-        else:
-            self.bot.config["otd_prefix"] = new_otd_prefix.upper()
-            await ctx.send(f'OTD prefix has been changed to {self.bot.config["otd_prefix"]}')
                            
     @commands.command()
     @commands.is_owner()
