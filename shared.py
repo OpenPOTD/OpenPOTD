@@ -1,6 +1,13 @@
 """A bunch of helper functions. """
 import re
 import sqlite3
+from datetime import date
+
+import discord
+from discord.ext import commands
+import logging
+import io
+import openpotd
 
 date_regex = re.compile('\d\d\d\d-\d\d-\d\d')
 
@@ -64,3 +71,45 @@ class POTD:
             self.stats_message_id = result[0][10]
             cursor.execute('SELECT image from images WHERE potd_id = ?', (id,))
             self.images = [x[0] for x in cursor.fetchall()]
+            self.logger = logging.getLogger(f'POTD {self.id}')
+            self.db = db
+
+    async def post(self, bot: openpotd.OpenPOTD, channel: int, potd_role_id: int):
+        channel = bot.get_channel(channel)
+        if channel is None:
+            raise Exception('No such channel!')
+        else:
+            try:
+                if len(self.images) == 0:
+                    await channel.send(
+                        f'{bot.config["otd_prefix"]}OTD {self.id} of {str(date.today())} has no picture attached. ')
+                else:
+                    await channel.send(f'{bot.config["otd_prefix"]}OTD {self.id} of {str(date.today())}',
+                                       file=discord.File(io.BytesIO(self.images[0]),
+                                                         filename=f'POTD-{self.id}-0.png'))
+                    for i in range(1, len(self.images)):
+                        await channel.send(
+                            file=discord.File(io.BytesIO(self.images[i]), filename=f'POTD-{self.id}-{i}.png'))
+
+                if potd_role_id is not None:
+                    await channel.send(f'DM your answers to me! <@&{potd_role_id}>')
+                else:
+                    await channel.send(f'DM your answers to me!')
+                    logging.warning('Config variable ping_role_id is not set! ')
+
+                # Construct embed and send
+                embed = discord.Embed(title=f'{bot.config["otd_prefix"]}oTD {self.id} Stats')
+                embed.add_field(name='Difficulty', value=self.difficulty)
+                embed.add_field(name='Weighted Solves', value='0')
+                embed.add_field(name='Base Points', value='0')
+                embed.add_field(name='Solves (official)', value='0')
+                embed.add_field(name='Solves (unofficial)', value='0')
+                stats_message = await channel.send(embed=embed)
+                self.add_stats_message(stats_message.id)
+            except Exception as e:
+                self.logger.warning(e)
+
+    def add_stats_message(self, message_id: int):
+        cursor = self.db.cursor()
+        cursor.execute('INSERT INTO stats_messages (potd_id, message_id) VALUES (?, ?)', (self.id, message_id))
+        self.db.commit()

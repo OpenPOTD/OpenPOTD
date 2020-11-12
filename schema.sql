@@ -77,3 +77,10 @@ CREATE TABLE IF NOT EXISTS "config" (
 	"command_prefix"	TEXT,
 	PRIMARY KEY("server_id")
 );
+CREATE TABLE IF NOT EXISTS "stats_messages" (
+	"id"	INTEGER,
+	"potd_id"	INTEGER,
+	"message_id"	INTEGER,
+	FOREIGN KEY("potd_id") REFERENCES "problems"("id"),
+	PRIMARY KEY("id")
+);

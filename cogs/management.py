@@ -11,8 +11,10 @@ from discord.ext import commands
 from discord.ext import flags
 
 import openpotd
+import shared
 
 authorised_set = set()
+
 
 def authorised(ctx):
     return ctx.author.id in authorised_set
@@ -31,48 +33,46 @@ class Management(commands.Cog):
         self.bot.loop.create_task(self.advance_potd())
 
     async def advance_potd(self):
-        print(f'Advancing {self.bot.config["otd_prefix"]}OTD at {datetime.now()}')
+        self.logger.info(f'Advancing POTD at {datetime.now()}')
         cursor = self.bot.db.cursor()
+
+        cursor.execute('SELECT server_id, potd_channel, ping_role_id, solved_role_id, otd_prefix from config '
+                       'WHERE potd_channel IS NOT NULL')
+        servers = cursor.fetchall()
+
         cursor.execute('SELECT problems.id, difficulty from (seasons left join problems on seasons.running = ? '
                        'and seasons.id = problems.season and problems.date = ? ) where problems.id IS NOT NULL',
                        (True, str(date.today())))
         result = cursor.fetchall()
-        potd_channel = self.bot.get_channel(self.bot.config['potd_channel'])
+
         if len(result) == 0 or result[0][0] is None:
-            await potd_channel.send(f'Sorry! We are running late on the {self.bot.config["otd_prefix"].lower()}otd today. ')
+            for server in servers:
+                potd_channel = self.bot.get_channel(server[1])
+                if potd_channel is not None:
+                    self.bot.loop.create_task(potd_channel.send(f'Sorry! We are running late on the {server[4].lower()}'
+                                                                f'otd today. '))
             return
 
-        # Send the potd
+        # Grab the potd
         potd_id = result[0][0]
-        cursor.execute('SELECT images.image from images where images.potd_id = ?', (potd_id,))
-        images = cursor.fetchall()
-        if len(images) == 0:
-            await potd_channel.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {str(date.today())} has no picture attached. ')
-        else:
-            await potd_channel.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {str(date.today())}',
-                                    file=discord.File(io.BytesIO(images[0][0]),
-                                                      filename=f'POTD-{potd_id}-0.png'))
-            for i in range(1, len(images)):
-                await potd_channel.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
+        problem = shared.POTD(result[0][0], self.bot.db)
 
-        potd_role_id = self.bot.config['ping_role_id']
-        if potd_role_id is not None:
-            await potd_channel.send(f'DM your answers to me! <@&{potd_role_id}>')
-        else:
-            await potd_channel.send(f'DM your answers to me!')
-            self.logger.warning('Config variable ping_role_id is not set! ')
+        for server in servers:
+            # Post the problem
+            await problem.post(self.bot, server[1], server[2])
 
-        # Construct embed and send
-        embed = discord.Embed(title=f'{self.bot.config["otd_prefix"]}oTD {potd_id} Stats')
-        embed.add_field(name='Difficulty', value=result[0][1])
-        embed.add_field(name='Weighted Solves', value='0')
-        embed.add_field(name='Base Points', value='0')
-        embed.add_field(name='Solves (official)', value='0')
-        embed.add_field(name='Solves (unofficial)', value='0')
-        stats_message = await potd_channel.send(embed=embed)
-
-        # Update stats embed in db
-        cursor.execute('UPDATE problems SET stats_message_id = ? WHERE problems.id = ?', (stats_message.id, potd_id))
+            # Remove the solved role from everyone
+            role_id = server[3]
+            if role_id is not None:
+                try:
+                    self.bot.logger.warning('Config variable solved_role_id is not set!')
+                    guild = self.bot.get_guild(server[0])
+                    if guild.get_role(role_id) is not None:
+                        role = guild.get_role(role_id)
+                        for member in role.members:
+                            await member.remove_roles(role)
+                except Exception as e:
+                    self.logger.warning(f'Server {server[0]}, {e}')
 
         # Advance the season
         cursor.execute('SELECT season FROM problems WHERE id = ?', (potd_id,))
@@ -81,19 +81,6 @@ class Management(commands.Cog):
 
         # Make the new potd publicly available
         cursor.execute('UPDATE problems SET public = ? WHERE id = ?', (True, potd_id))
-
-        # Remove the solved role from everyone
-        role_id = self.bot.config['solved_role_id']
-        if role_id is not None:
-            self.bot.logger.warning('Config variable solved_role_id is not set!')
-            for guild in self.bot.guilds:
-                if guild.get_role(role_id) is not None:
-                    role = guild.get_role(role_id)
-                    for member in role.members:
-                        await member.remove_roles(role)
-                    break
-            else:
-                self.bot.logger.error('No guild found with a role matching the id set in solved_role_id!')
 
         # Commit db
         self.bot.db.commit()
@@ -177,8 +164,9 @@ class Management(commands.Cog):
         if len(images) == 0:
             await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date} has no picture attached. ')
         else:
-            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date}', file=discord.File(io.BytesIO(images[0][0]),
-                                                                               filename=f'POTD-{potd_id}-0.png'))
+            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date}',
+                           file=discord.File(io.BytesIO(images[0][0]),
+                                             filename=f'POTD-{potd_id}-0.png'))
             for i in range(1, len(images)):
                 await ctx.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
 
@@ -261,7 +249,7 @@ class Management(commands.Cog):
             self.logger.info(f'Ended season with id {season}. ')
         else:
             await ctx.send(f'Season {season} already stopped!')
-                           
+
     @commands.command()
     @commands.is_owner()
     async def execute_sql(self, ctx, *, sql):
