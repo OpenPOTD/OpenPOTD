@@ -89,6 +89,8 @@ class ServerConfig(commands.Cog):
     @has_permissions(manage_guild=True)
     @commands.command(brief='Sets the potd channel')
     async def potd_channel(self, ctx, new: discord.TextChannel):
+        if not new.guild.id == ctx.guild.id:
+            await ctx.send("Please select a channel in **this** server! ")
         cursor = self.bot.db.cursor()
         cursor.execute('UPDATE config SET potd_channel = ? WHERE server_id = ?', (new.id, ctx.guild.id))
         self.bot.db.commit()

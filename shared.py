@@ -95,7 +95,7 @@ class POTD:
                     await channel.send(f'DM your answers to me! <@&{potd_role_id}>')
                 else:
                     await channel.send(f'DM your answers to me!')
-                    logging.warning('Config variable ping_role_id is not set! ')
+                    logging.warning(f'Config variable ping_role_id is not set! [Server {channel.guild.id}]')
 
                 # Construct embed and send
                 embed = discord.Embed(title=f'{bot.config["otd_prefix"]}oTD {self.id} Stats')
