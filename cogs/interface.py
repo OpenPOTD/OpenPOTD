@@ -307,8 +307,7 @@ class Interface(commands.Cog):
                     [f'{rank}. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20 * i:20 * i + 20]])
                 page.description = scores
                 pages.append(page)
-            menu = menus.Menu(ctx, pages)
-            await menu.open()
+            await self.bot.get_cog('MenuManager').new_menu(ctx, pages)
 
     @commands.command()
     async def fetch(self, ctx, date_or_id):
