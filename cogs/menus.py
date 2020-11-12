@@ -10,7 +10,7 @@ active_menus = {}
 # Deletes menus after a certain time.
 async def delete_after(timeout: int, id):
     await asyncio.sleep(timeout)
-    active_menus[id].remove()
+    await active_menus[id].remove()
 
 
 class MenuManager(commands.Cog):
