@@ -105,11 +105,32 @@ class POTD:
                 embed.add_field(name='Solves (official)', value='0')
                 embed.add_field(name='Solves (unofficial)', value='0')
                 stats_message = await channel.send(embed=embed)
-                self.add_stats_message(stats_message.id)
+                self.add_stats_message(stats_message.id, channel.guild.id)
             except Exception as e:
                 self.logger.warning(e)
 
-    def add_stats_message(self, message_id: int):
+    def add_stats_message(self, message_id: int, server_id: int):
         cursor = self.db.cursor()
-        cursor.execute('INSERT INTO stats_messages (potd_id, message_id) VALUES (?, ?)', (self.id, message_id))
+        cursor.execute('INSERT INTO stats_messages (potd_id, message_id, server_id) VALUES (?, ?, ?)',
+                       (self.id, message_id, server_id))
         self.db.commit()
+
+    def build_embed(self, db: sqlite3.Connection, full_stats: bool, prefix: str = 'P'):
+        cursor = db.cursor()
+        cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (self.id, True))
+        official_solves = cursor.fetchall()[0][0]
+        cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (self.id, False))
+        unofficial_solves = cursor.fetchall()[0][0]
+
+        embed = discord.Embed(title=f'{prefix.upper()}oTD {self.id} Stats')
+
+        if full_stats:
+            embed.add_field(name='Date', value=self.date)
+            embed.add_field(name='Season', value=self.season)
+
+        embed.add_field(name='Difficulty', value=self.difficulty)
+        embed.add_field(name='Weighted Solves', value=f'{self.weighted_solves:.2f}')
+        embed.add_field(name='Base Points', value=f'{self.base_points:.2f}')
+        embed.add_field(name='Solves (official)', value=official_solves)
+        embed.add_field(name='Solves (unofficial)', value=unofficial_solves)
+        return embed

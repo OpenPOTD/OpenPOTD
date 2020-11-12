@@ -100,30 +100,21 @@ class Interface(commands.Cog):
         self.bot.db.commit()
 
     async def update_embed(self, potd_id: int):
-        # Find the message ID in the database
         cursor = self.bot.db.cursor()
-        cursor.execute('SELECT stats_message_id from problems where problems.id = ?', (potd_id,))
-        result = cursor.fetchall()
-        if len(result) == 0:
-            self.logger.error(f'No problem with id {potd_id}. Failed to refresh. ')
-            return
-        message_id = result[0][0]
-        if message_id is None:
-            self.logger.warning(f'No stats message registered for potd {potd_id}. ')
-            return
+        cursor.execute('SELECT config.server_id, potd_channel, otd_prefix, message_id from config left join '
+                       'stats_messages ON config.server_id = stats_messages.server_id WHERE stats_messages.id '
+                       'is NOT NULL and stats_messages.potd_id = ?;', (potd_id,))
+        servers = cursor.fetchall()
 
-        # Find the correct channel
-        channel = self.bot.get_channel(self.bot.config['potd_channel'])
-        if channel is None:
-            self.logger.error(f'Could not find potd_channel {self.bot.config["potd_channel"]}')
-            return
-        message = await channel.fetch_message(message_id)
+        problem = shared.POTD(potd_id, self.bot.db)
 
-        # Construct the new embed
-        new_embed = self.build_embed(potd_id, False)
-
-        # Update the message
-        await message.edit(embed=new_embed)
+        for server_data in servers:
+            potd_channel: discord.TextChannel = self.bot.get_channel(server_data[1])
+            if potd_channel is not None:
+                stats_message = await potd_channel.fetch_message(server_data[3])
+                if stats_message is not None:
+                    embed = problem.build_embed(self.bot.db, False, server_data[2])
+                    await stats_message.edit(embed=embed)
 
     def refresh(self, season: int, potd_id: int):
         # Update the rankings in the db
@@ -318,33 +309,6 @@ class Interface(commands.Cog):
                 pages.append(page)
             menu = dpymenus.PaginatedMenu(ctx).set_timeout(60).add_pages(pages).persist_on_close()
             await menu.open()
-
-    def build_embed(self, problem_id, full_stats: bool):
-        cursor = self.bot.db.cursor()
-        cursor.execute('SELECT date, season, difficulty, weighted_solves, base_points from problems where '
-                       'problems.id = ? and problems.public = ?', (problem_id, True))
-        result = cursor.fetchall()
-        if len(result) == 0:
-            raise Exception('No such potd available.')
-        potd_information = result[0]
-
-        cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (problem_id, True))
-        official_solves = cursor.fetchall()[0][0]
-        cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (problem_id, False))
-        unofficial_solves = cursor.fetchall()[0][0]
-
-        embed = discord.Embed(title=f'{self.bot.config["otd_prefix"]}oTD {problem_id} Stats')
-
-        if full_stats:
-            embed.add_field(name='Date', value=potd_information[0])
-            embed.add_field(name='Season', value=potd_information[1])
-
-        embed.add_field(name='Difficulty', value=potd_information[2])
-        embed.add_field(name='Weighted Solves', value=f'{potd_information[3]:.2f}')
-        embed.add_field(name='Base Points', value=f'{potd_information[4]:.2f}')
-        embed.add_field(name='Solves (official)', value=official_solves)
-        embed.add_field(name='Solves (unofficial)', value=unofficial_solves)
-        return embed
 
     @commands.command()
     async def fetch(self, ctx, date_or_id):
