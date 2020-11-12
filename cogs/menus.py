@@ -56,6 +56,7 @@ class Menu:
         logging.info('Created menu. ')
         self.id = ctx.message.id
         self.cur_page = cur_page
+        global active_menus
         active_menus[self.id] = self
         ctx.bot.loop.create_task(delete_after(timeout, self.id))
 
