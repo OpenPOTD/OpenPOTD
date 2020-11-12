@@ -51,6 +51,7 @@ class Management(commands.Cog):
                 if potd_channel is not None:
                     self.bot.loop.create_task(potd_channel.send(f'Sorry! We are running late on the {server[4].lower()}'
                                                                 f'otd today. '))
+                    self.logger.info(f'Informed server {server[0]} that there is no problem today.')
             return
 
         # Grab the potd
@@ -60,6 +61,7 @@ class Management(commands.Cog):
         for server in servers:
             # Post the problem
             await problem.post(self.bot, server[1], server[2])
+            self.logger.info(f'Posted in server {server[0]}. ')
 
             # Remove the solved role from everyone
             role_id = server[3]
