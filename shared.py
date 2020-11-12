@@ -39,3 +39,28 @@ def id_from_date_or_id(date_or_id: str, conn: sqlite3.Connection, is_public: boo
             raise Exception(f'There are no problems available for the id {date_or_id}. ')
     else:
         raise Exception(f'Please enter a valid id or date. ')
+
+
+class POTD:
+    """Representation of a problem of the day. """
+
+    def __init__(self, id: int, db: sqlite3.Connection):
+        cursor = db.cursor()
+        cursor.execute('SELECT * from problems WHERE id = ?', (id,))
+        result = cursor.fetchall()
+        if len(result) == 0:
+            raise Exception('No such problem! ')
+        else:
+            self.id = id
+            self.date = result[0][1]
+            self.season = result[0][2]
+            self.statement = result[0][3]
+            self.difficulty = result[0][4]
+            self.weighted_solves = result[0][5]
+            self.base_points = result[0][6]
+            self.answer = result[0][7]
+            self.public = result[0][8]
+            self.source = result[0][9]
+            self.stats_message_id = result[0][10]
+            cursor.execute('SELECT image from images WHERE potd_id = ?', (id,))
+            self.images = [x[0] for x in cursor.fetchall()]
