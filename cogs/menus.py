@@ -19,7 +19,7 @@ class MenuManager(commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
-        print('added reaction' + str(payload))
+        logging.info('added reaction' + str(payload))
         if payload.message_id in active_menus:
             if payload.emoji.name == '◀':
                 await active_menus[payload.message_id].previous_page()
@@ -30,7 +30,7 @@ class MenuManager(commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
-        print('removed reaction' + str(payload))
+        logging.info('removed reaction' + str(payload))
         if payload.message_id in active_menus:
             if payload.emoji.name == '◀':
                 await active_menus[payload.message_id].previous_page()
