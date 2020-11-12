@@ -191,7 +191,7 @@ class Management(commands.Cog):
         self.bot.db.commit()
         await ctx.send(f'Updated {self.bot.config["otd_prefix"].lower()}otd. ')
 
-    @commands.command()
+    @commands.command(name='pinfo')
     @commands.check(authorised)
     async def info(self, ctx, potd):
         cursor = self.bot.db.cursor()

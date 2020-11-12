@@ -455,6 +455,20 @@ class Interface(commands.Cog):
             cursor.execute('UPDATE users SET anonymous = ? WHERE discord_id = ?', (not result[0][0], ctx.author.id))
             self.bot.db.commit()
 
+    @commands.command(brief='Some information about the bot. ')
+    async def info(self, ctx):
+        embed = discord.Embed(description='OpenPOTD is a bot that posts short answer questions once a day for you '
+                                          'to solve. OpenPOTD is open-source, and you can find our GitHub repository '
+                                          'at https://github.com/IcosahedralDice/OpenPOTD. \n'
+                                          'Have a bug report? Want to propose some problems? Join the OpenPOTD '
+                                          'development server at https://discord.gg/ub2Y8b8zpt. \n'
+                                          'Get the OpenPOTD manual with the `manual` command. ')
+        await ctx.send(embed=embed)
+
+    @commands.command(brief='Download the OpenPOTD manual. ')
+    async def manual(self, ctx):
+        await ctx.send('OpenPOTD Manual: ', file=discord.File('openpotd-manual.pdf'))
+
 
 def setup(bot: openpotd.OpenPOTD):
     bot.add_cog(Interface(bot))
