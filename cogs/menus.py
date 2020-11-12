@@ -22,6 +22,7 @@ class MenuManager(commands.Cog):
         logging.info('added reaction' + payload.emoji.name)
         if payload.user_id == self.bot.user.id:
             return
+        logging.info(str(active_menus))
         if payload.message_id in active_menus:
             if payload.emoji.name == '◀':
                 await active_menus[payload.message_id].previous_page()
