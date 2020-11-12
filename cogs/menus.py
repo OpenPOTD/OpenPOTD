@@ -20,21 +20,21 @@ class MenuManager(commands.Cog):
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         if payload.message_id in active_menus:
             if payload.emoji == '◀':
-                active_menus[payload.message_id].previous_page()
+                await active_menus[payload.message_id].previous_page()
             elif payload.emoji == '⏹':
-                active_menus[payload.message_id].remove()
+                await active_menus[payload.message_id].remove()
             elif payload.emoji == '▶':
-                active_menus[payload.message_id].next_page()
+                await active_menus[payload.message_id].next_page()
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
         if payload.message_id in active_menus:
             if payload.emoji == '◀':
-                active_menus[payload.message_id].previous_page()
+                await active_menus[payload.message_id].previous_page()
             elif payload.emoji == '⏹':
-                active_menus[payload.message_id].remove()
+                await active_menus[payload.message_id].remove()
             elif payload.emoji == '▶':
-                active_menus[payload.message_id].next_page()
+                await active_menus[payload.message_id].next_page()
 
 
 class Menu:
@@ -50,23 +50,23 @@ class Menu:
         active_menus[self.id] = self
         ctx.bot.loop.create_task(delete_after(timeout, self.id))
 
-    def open(self):
+    async def open(self):
         self.message = await self.ctx.send(embed=self.pages[self.cur_page])
         await self.message.add_reaction('◀')
         await self.message.add_reaction('⏹')
         await self.message.add_reaction('▶')
 
-    def next_page(self):
+    async def next_page(self):
         if self.cur_page < len(self.pages) - 1:
             self.cur_page += 1
             await self.ctx.message.edit(embed=self.pages[self.cur_page])
 
-    def previous_page(self):
+    async def previous_page(self):
         if self.cur_page > 0:
             self.cur_page -= 1
             await self.message.edit(embed=self.pages[self.cur_page])
 
-    def remove(self):
+    async def remove(self):
         await self.message.remove_reaction('◀', self.ctx.me)
         await self.message.remove_reaction('⏹', self.ctx.me)
         await self.message.remove_reaction('▶', self.ctx.me)
