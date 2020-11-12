@@ -1,3 +1,4 @@
+import logging
 import discord
 from discord.ext import commands
 import asyncio
@@ -20,22 +21,22 @@ class MenuManager(commands.Cog):
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         print('added reaction' + str(payload))
         if payload.message_id in active_menus:
-            if payload.emoji == '◀':
+            if payload.emoji.name == '◀':
                 await active_menus[payload.message_id].previous_page()
-            elif payload.emoji == '⏹':
+            elif payload.emoji.name == '⏹':
                 await active_menus[payload.message_id].remove()
-            elif payload.emoji == '▶':
+            elif payload.emoji.name == '▶':
                 await active_menus[payload.message_id].next_page()
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
         print('removed reaction' + str(payload))
         if payload.message_id in active_menus:
-            if payload.emoji == '◀':
+            if payload.emoji.name == '◀':
                 await active_menus[payload.message_id].previous_page()
-            elif payload.emoji == '⏹':
+            elif payload.emoji.name == '⏹':
                 await active_menus[payload.message_id].remove()
-            elif payload.emoji == '▶':
+            elif payload.emoji.name == '▶':
                 await active_menus[payload.message_id].next_page()
 
 
@@ -47,12 +48,14 @@ class Menu:
         self.pages = pages
         self.message = None
 
+        logging.info('Created menu. ')
         self.id = ctx.message.id
         self.cur_page = cur_page
         active_menus[self.id] = self
         ctx.bot.loop.create_task(delete_after(timeout, self.id))
 
     async def open(self):
+        logging.info(f'Opening menu {self.id}')
         self.message = await self.ctx.send(embed=self.pages[self.cur_page])
         await self.message.add_reaction('◀')
         await self.message.add_reaction('⏹')
