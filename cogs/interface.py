@@ -4,10 +4,10 @@ from datetime import datetime
 
 import discord
 from discord.ext import commands
-import dpymenus
 
 import openpotd
 import shared
+from cogs import menus
 
 
 # Change this if you want a different algorithm
@@ -269,7 +269,7 @@ class Interface(commands.Cog):
             await ctx.send(embed=embed)
 
     @commands.command()
-    async def rank(self, ctx, season: int = None):
+    async def rank(self, ctx: commands.Context, season: int = None):
         cursor = self.bot.db.cursor()
         if season is None:
             cursor.execute('SELECT id, name from seasons where running = ?', (True,))
@@ -302,12 +302,12 @@ class Interface(commands.Cog):
         else:
             pages = []
             for i in range(len(rankings) // 20 + 1):
-                page = dpymenus.Page(title=f'{szn_name} rankings - Page {i + 1}')
+                page = discord.Embed(title=f'{szn_name} rankings - Page {i + 1}')
                 scores = '\n'.join(
                     [f'{rank}. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20 * i:20 * i + 20]])
                 page.description = scores
                 pages.append(page)
-            menu = dpymenus.PaginatedMenu(ctx).set_timeout(60).add_pages(pages).persist_on_close()
+            menu = menus.Menu(ctx, pages)
             await menu.open()
 
     @commands.command()

@@ -43,16 +43,18 @@ class Menu:
         assert not len(pages) == 0
         self.ctx = ctx
         self.pages = pages
-
-        self.message = await ctx.send(embed=self.pages[cur_page])
-        await self.message.add_reaction('◀')
-        await self.message.add_reaction('⏹')
-        await self.message.add_reaction('▶')
+        self.message = None
 
         self.id = ctx.message.id
         self.cur_page = cur_page
         active_menus[self.id] = self
         ctx.bot.loop.create_task(delete_after(timeout, self.id))
+
+    def open(self):
+        self.message = await self.ctx.send(embed=self.pages[self.cur_page])
+        await self.message.add_reaction('◀')
+        await self.message.add_reaction('⏹')
+        await self.message.add_reaction('▶')
 
     def next_page(self):
         if self.cur_page < len(self.pages) - 1:

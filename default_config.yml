@@ -22,3 +22,4 @@ cogs:
   - cogs.management
   - cogs.interface
   - cogs.serverconfig
+  - cogs.menus
