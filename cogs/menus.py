@@ -10,10 +10,10 @@ class MenuManager(commands.Cog):
         self.active_menus = {}
 
     # Deletes menus after a certain time.
-    async def delete_after(self, timeout: int, id):
+    async def delete_after(self, timeout: int, menu_id):
         await asyncio.sleep(timeout)
-        await self.active_menus[id].remove()
-        del self.active_menus[id]
+        await self.active_menus[menu_id].remove()
+        del self.active_menus[menu_id]
 
     async def new_menu(self, ctx: commands.Context, pages: list, cur_page: int = 0, timeout: int = 60):
         menu = Menu(ctx, pages, cur_page, timeout)
@@ -29,8 +29,7 @@ class MenuManager(commands.Cog):
             if payload.emoji.name == '◀':
                 await self.active_menus[payload.message_id].previous_page()
             elif payload.emoji.name == '⏹':
-                await self.active_menus[payload.message_id].remove()
-                del self.active_menus[id]
+                await self.delete_after(0, payload.message_id)
             elif payload.emoji.name == '▶':
                 await self.active_menus[payload.message_id].next_page()
 
@@ -42,8 +41,7 @@ class MenuManager(commands.Cog):
             if payload.emoji.name == '◀':
                 await self.active_menus[payload.message_id].previous_page()
             elif payload.emoji.name == '⏹':
-                await self.active_menus[payload.message_id].remove()
-                del self.active_menus[id]
+                await self.delete_after(0, payload.message_id)
             elif payload.emoji.name == '▶':
                 await self.active_menus[payload.message_id].next_page()
 
