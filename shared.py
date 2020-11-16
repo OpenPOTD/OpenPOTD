@@ -83,6 +83,11 @@ class POTD:
             self.stats_message_id = result[0][10]
             cursor.execute('SELECT image from images WHERE potd_id = ?', (id,))
             self.images = [x[0] for x in cursor.fetchall()]
+            cursor.execute('SELECT name from seasons WHERE id = ?', (self.season,))
+            self.season_name = cursor.fetchall()[0][0]
+            cursor.execute('SELECT COUNT() from problems WHERE problems.season = ? AND problems.date < ?',
+                           (self.season, self.date))
+            self.season_order = cursor.fetchall()[0][0]
             self.logger = logging.getLogger(f'POTD {self.id}')
             self.db = db
 
@@ -92,11 +97,12 @@ class POTD:
             raise Exception('No such channel!')
         else:
             try:
+                identification_name = f'**{self.season_name} - #{self.season_order+1}'
                 if len(self.images) == 0:
                     await channel.send(
-                        f'{bot.config["otd_prefix"]}OTD {self.id} of {str(date.today())} has no picture attached. ')
+                        f'{identification_name} of {str(date.today())} has no picture attached. ')
                 else:
-                    await channel.send(f'{bot.config["otd_prefix"]}OTD {self.id} of {str(date.today())}',
+                    await channel.send(f'{identification_name} [{str(date.today())}]',
                                        file=discord.File(io.BytesIO(self.images[0]),
                                                          filename=f'POTD-{self.id}-0.png'))
                     for i in range(1, len(self.images)):
