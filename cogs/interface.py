@@ -137,33 +137,27 @@ class Interface(commands.Cog):
         else:
             answer = int(s)
 
-        # Get the current answer from the database
         cursor = self.bot.db.cursor()
-        cursor.execute('SELECT answer, problems.id, seasons.id from seasons left join problems '
-                       'where seasons.running = ? and problems.id = seasons.latest_potd', (True,))
-        correct_answer_list = cursor.fetchall()
 
         # Make sure the user is registered
         cursor.execute('''INSERT OR IGNORE INTO users (discord_id, nickname, anonymous) VALUES (?, ?, ?)''',
                        (message.author.id, message.author.display_name, True))
         self.bot.db.commit()
 
-        if len(correct_answer_list) == 0:
+        current_problem = shared.get_current_problem(conn=self.bot.db)
+        if current_problem is None:
             await message.channel.send(
                 f'There is no current {self.bot.config["otd_prefix"]}OTD to check answers against. ')
             return
         else:
-            correct_answer, potd_id, season_id = correct_answer_list[0][0], correct_answer_list[0][1], \
-                                                 correct_answer_list[0][2]
-
             # Put a ranking entry in for them
             cursor.execute('INSERT or IGNORE into rankings (season_id, user_id) VALUES (?, ?)',
-                           (season_id, message.author.id,))
+                           (current_problem.season, message.author.id,))
             self.bot.db.commit()
 
             # Check that they have not already solved this problem
             cursor.execute('SELECT exists (select 1 from solves where problem_id = ? and solves.user = ?)',
-                           (potd_id, message.author.id))
+                           (current_problem.id, message.author.id))
             if cursor.fetchall()[0][0]:
                 await message.channel.send(f'You have already solved this {self.bot.config["otd_prefix"].lower()}otd! ')
                 return
@@ -172,27 +166,27 @@ class Interface(commands.Cog):
             try:
                 cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time) '
                                'VALUES (?, ?, ?, ?, ?)',
-                               (message.author.id, potd_id, True, int(message.content), datetime.utcnow()))
+                               (message.author.id, current_problem.id, True, int(message.content), datetime.utcnow()))
                 self.bot.db.commit()
             except OverflowError:
                 cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time '
                                'VALUES (?, ?, ?, ?, ?)',
-                               (message.author.id, potd_id, True, -1000, datetime.utcnow()))
+                               (message.author.id, current_problem.id, True, -1000, datetime.utcnow()))
                 self.bot.db.commit()
 
             # Calculate the number of attempts
             cursor.execute('SELECT count(1) from attempts where attempts.potd_id = ? and attempts.user_id = ?',
-                           (potd_id, message.author.id))
+                           (current_problem.answer, message.author.id))
             num_attempts = cursor.fetchall()[0][0]
 
-            if answer == correct_answer:  # Then the answer is correct. Let's give them points.
+            if answer == current_problem.answer:  # Then the answer is correct. Let's give them points.
                 # Insert data
                 cursor.execute('INSERT into solves (user, problem_id, num_attempts, official) VALUES (?, ?, ?, ?)',
-                               (message.author.id, potd_id, num_attempts, True))
+                               (message.author.id, current_problem.answer, num_attempts, True))
                 self.bot.db.commit()
 
                 # Recalculate scoreboard
-                self.refresh(season_id, potd_id)
+                self.refresh(current_problem.season, current_problem.id)
 
                 # Alert user that they got the question correct
                 await message.channel.send(f'Thank you! You solved the problem after {num_attempts} attempts. ')
@@ -225,7 +219,7 @@ class Interface(commands.Cog):
                 await message.channel.send(f'You did not solve this problem! Number of attempts: `{num_attempts}`. ')
 
                 # Recalculate stuff anyway
-                self.refresh(season_id, potd_id)
+                self.refresh(current_problem.season, current_problem.id)
 
                 # Log that they didn't solve it
                 self.logger.info(
