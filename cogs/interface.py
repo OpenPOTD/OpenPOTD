@@ -210,6 +210,8 @@ class Interface(commands.Cog):
 
                     try:
                         await member.add_roles(solved_role, reason=f'Solved POTD')
+                    except Exception as e:
+                        self.logger.warning(e)
 
                 # Logged that they solved it
                 self.logger.info(
