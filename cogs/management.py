@@ -60,8 +60,12 @@ class Management(commands.Cog):
 
         for server in servers:
             # Post the problem
-            await problem.post(self.bot, server[1], server[2])
-            self.logger.info(f'Posted in server {server[0]}. ')
+            try:
+                await problem.post(self.bot, server[1], server[2])
+                self.logger.info(f'Posted in server {server[0]}. ')
+            except Exception as e:
+                self.logger.warning(e)
+                self.logger.warning(f'No such channel {server[1]}. ')
 
             # Remove the solved role from everyone
             role_id = server[3]
