@@ -176,13 +176,13 @@ class Interface(commands.Cog):
 
             # Calculate the number of attempts
             cursor.execute('SELECT count(1) from attempts where attempts.potd_id = ? and attempts.user_id = ?',
-                           (current_problem.answer, message.author.id))
+                           (current_problem.id, message.author.id))
             num_attempts = cursor.fetchall()[0][0]
 
             if answer == current_problem.answer:  # Then the answer is correct. Let's give them points.
                 # Insert data
                 cursor.execute('INSERT into solves (user, problem_id, num_attempts, official) VALUES (?, ?, ?, ?)',
-                               (message.author.id, current_problem.answer, num_attempts, True))
+                               (message.author.id, current_problem.id, num_attempts, True))
                 self.bot.db.commit()
 
                 # Recalculate scoreboard
