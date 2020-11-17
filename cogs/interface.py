@@ -215,7 +215,8 @@ class Interface(commands.Cog):
 
                 # Logged that they solved it
                 self.logger.info(
-                    f'User {message.author.id} just solved {self.bot.config["otd_prefix"].lower()}otd {potd_id}. ')
+                    f'User {message.author.id} just solved {self.bot.config["otd_prefix"].lower()}otd '
+                    f'{current_problem.id}. ')
 
             else:
                 # They got it wrong
@@ -226,7 +227,8 @@ class Interface(commands.Cog):
 
                 # Log that they didn't solve it
                 self.logger.info(
-                    f'User {message.author.id} submitted incorrect answer {answer} for {self.bot.config["otd_prefix"].lower()}otd {potd_id}. ')
+                    f'User {message.author.id} submitted incorrect answer {answer} for '
+                    f'{self.bot.config["otd_prefix"].lower()}otd {current_problem.id}. ')
 
     @commands.command()
     async def score(self, ctx, season: int = None):

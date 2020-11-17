@@ -97,7 +97,7 @@ class POTD:
             raise Exception('No such channel!')
         else:
             try:
-                identification_name = f'**{self.season_name} - #{self.season_order+1}'
+                identification_name = f'**{self.season_name} - #{self.season_order+1}**'
                 if len(self.images) == 0:
                     await channel.send(
                         f'{identification_name} of {str(date.today())} has no picture attached. ')
