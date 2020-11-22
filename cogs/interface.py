@@ -1,13 +1,15 @@
 import io
 import logging
+import math
 from datetime import datetime
+import datetime as dt
 
 import discord
 from discord.ext import commands
+import dpymenus
 
 import openpotd
 import shared
-from cogs import menus
 
 
 # Change this if you want a different algorithm
@@ -19,6 +21,7 @@ class Interface(commands.Cog):
     def __init__(self, bot: openpotd.OpenPOTD):
         self.bot = bot
         self.logger = logging.getLogger('interface')
+        self.cooldowns = {}
 
     @commands.command()
     @commands.check(lambda ctx: False)  # This command is disabled since it only applies for multi-server config
@@ -137,28 +140,48 @@ class Interface(commands.Cog):
         else:
             answer = int(s)
 
-        # Get the current answer from the database
         cursor = self.bot.db.cursor()
+
+        # Check cooldowns
+        if self.bot.config['cooldown']:
+            if message.author.id in self.cooldowns and self.cooldowns[message.author.id] > datetime.utcnow():
+                await message.channel.send(f"You're on cooldown! Send another answer in "
+                                           f"{(self.cooldowns[message.author.id] - datetime.utcnow()).total_seconds():.2f} seconds. ")
+                return
+
+        # Get the current answer from the database
+        cursor.execute('SELECT answer, problems.id, seasons.id from seasons left join problems '
+                       'where seasons.running = ? and problems.id = seasons.latest_potd', (True,))
+        correct_answer_list = cursor.fetchall()
 
         # Make sure the user is registered
         cursor.execute('''INSERT OR IGNORE INTO users (discord_id, nickname, anonymous) VALUES (?, ?, ?)''',
                        (message.author.id, message.author.display_name, True))
         self.bot.db.commit()
 
-        current_problem = shared.get_current_problem(conn=self.bot.db)
-        if current_problem is None:
+        if len(correct_answer_list) == 0:
             await message.channel.send(
                 f'There is no current {self.bot.config["otd_prefix"]}OTD to check answers against. ')
             return
         else:
+            correct_answer, potd_id, season_id = correct_answer_list[0][0], correct_answer_list[0][1], \
+                                                 correct_answer_list[0][2]
+
+            if self.bot.config['cooldown']:
+                cursor.execute('SELECT count() from attempts where user_id = ? and potd_id = ?',
+                               (message.author.id, potd_id))
+                num_attempts = cursor.fetchall()[0][0]
+                cool_down = math.pow(1.75, num_attempts)
+                self.cooldowns[message.author.id] = datetime.utcnow() + dt.timedelta(seconds=cool_down)
+
             # Put a ranking entry in for them
             cursor.execute('INSERT or IGNORE into rankings (season_id, user_id) VALUES (?, ?)',
-                           (current_problem.season, message.author.id,))
+                           (season_id, message.author.id,))
             self.bot.db.commit()
 
             # Check that they have not already solved this problem
             cursor.execute('SELECT exists (select 1 from solves where problem_id = ? and solves.user = ?)',
-                           (current_problem.id, message.author.id))
+                           (potd_id, message.author.id))
             if cursor.fetchall()[0][0]:
                 await message.channel.send(f'You have already solved this {self.bot.config["otd_prefix"].lower()}otd! ')
                 return
@@ -167,69 +190,64 @@ class Interface(commands.Cog):
             try:
                 cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time) '
                                'VALUES (?, ?, ?, ?, ?)',
-                               (message.author.id, current_problem.id, True, int(message.content), datetime.utcnow()))
+                               (message.author.id, potd_id, True, int(message.content), datetime.utcnow()))
                 self.bot.db.commit()
             except OverflowError:
                 cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time '
                                'VALUES (?, ?, ?, ?, ?)',
-                               (message.author.id, current_problem.id, True, -1000, datetime.utcnow()))
+                               (message.author.id, potd_id, True, -1000, datetime.utcnow()))
                 self.bot.db.commit()
 
             # Calculate the number of attempts
             cursor.execute('SELECT count(1) from attempts where attempts.potd_id = ? and attempts.user_id = ?',
-                           (current_problem.id, message.author.id))
+                           (potd_id, message.author.id))
             num_attempts = cursor.fetchall()[0][0]
 
-            if answer == current_problem.answer:  # Then the answer is correct. Let's give them points.
+            if answer == correct_answer:  # Then the answer is correct. Let's give them points.
                 # Insert data
                 cursor.execute('INSERT into solves (user, problem_id, num_attempts, official) VALUES (?, ?, ?, ?)',
-                               (message.author.id, current_problem.id, num_attempts, True))
+                               (message.author.id, potd_id, num_attempts, True))
                 self.bot.db.commit()
 
                 # Recalculate scoreboard
-                self.refresh(current_problem.season, current_problem.id)
+                self.refresh(season_id, potd_id)
 
                 # Alert user that they got the question correct
                 await message.channel.send(f'Thank you! You solved the problem after {num_attempts} attempts. ')
 
                 # Give them the "solved" role
-                cursor.execute('SELECT server_id, solved_role_id from config where solved_role_id is not null')
-                servers = cursor.fetchall()
-
-                for server in servers:
-                    guild: discord.Guild = self.bot.get_guild(server[0])
-                    if guild is None:
-                        continue
-
-                    member: discord.Member = guild.get_member(message.author.id)
-                    if member is None:
-                        continue
-
-                    solved_role: discord.Role = guild.get_role(server[1])
-                    if solved_role is None:
-                        continue
-
-                    try:
-                        await member.add_roles(solved_role, reason=f'Solved POTD')
-                    except Exception as e:
-                        self.logger.warning(e)
+                role_id = self.bot.config['solved_role_id']
+                if role_id is not None:
+                    for guild in self.bot.guilds:
+                        if guild.get_role(role_id) is not None:
+                            member = guild.get_member(message.author.id)
+                            if member is not None:
+                                await member.add_roles(guild.get_role(role_id),
+                                                       reason=f'Solved {self.bot.config["otd_prefix"].lower()}otd')
+                            else:
+                                self.logger.warning(
+                                    f'User {message.author.id} solved the {self.bot.config["otd_prefix"]}OTD despite not being '
+                                    f'in the server. ')
+                            break
+                    else:
+                        self.logger.error('No guild found with a role matching the id set in solved_role_id!')
+                else:
+                    self.logger.warning('Config variable solved_role_id is not set!')
 
                 # Logged that they solved it
                 self.logger.info(
-                    f'User {message.author.id} just solved {self.bot.config["otd_prefix"].lower()}otd '
-                    f'{current_problem.id}. ')
+                    f'User {message.author.id} just solved {self.bot.config["otd_prefix"].lower()}otd {potd_id}. ')
 
             else:
                 # They got it wrong
                 await message.channel.send(f'You did not solve this problem! Number of attempts: `{num_attempts}`. ')
 
                 # Recalculate stuff anyway
-                self.refresh(current_problem.season, current_problem.id)
+                self.refresh(season_id, potd_id)
 
                 # Log that they didn't solve it
                 self.logger.info(
-                    f'User {message.author.id} submitted incorrect answer {answer} for '
-                    f'{self.bot.config["otd_prefix"].lower()}otd {current_problem.id}. ')
+                    f'User {message.author.id} submitted incorrect answer {answer} for {self.bot.config["otd_prefix"].lower()}otd {potd_id}. ')
 
     @commands.command()
     async def score(self, ctx, season: int = None):
@@ -269,7 +287,7 @@ class Interface(commands.Cog):
             await ctx.send(embed=embed)
 
     @commands.command()
-    async def rank(self, ctx: commands.Context, season: int = None):
+    async def rank(self, ctx, season: int = None):
         cursor = self.bot.db.cursor()
         if season is None:
             cursor.execute('SELECT id, name from seasons where running = ?', (True,))
@@ -302,12 +320,13 @@ class Interface(commands.Cog):
         else:
             pages = []
             for i in range(len(rankings) // 20 + 1):
-                page = discord.Embed(title=f'{szn_name} rankings - Page {i + 1}')
+                page = dpymenus.Page(title=f'{szn_name} rankings - Page {i + 1}')
                 scores = '\n'.join(
                     [f'{rank}. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20 * i:20 * i + 20]])
                 page.description = scores
                 pages.append(page)
-            await self.bot.get_cog('MenuManager').new_menu(ctx, pages)
+            menu = dpymenus.PaginatedMenu(ctx).set_timeout(60).add_pages(pages).persist_on_close()
+            await menu.open()
 
     @commands.command()
     async def fetch(self, ctx, date_or_id):
