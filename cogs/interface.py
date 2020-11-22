@@ -137,6 +137,7 @@ class Interface(commands.Cog):
         else:
             answer = int(s)
 
+        # Get the current answer from the database
         cursor = self.bot.db.cursor()
 
         # Make sure the user is registered
