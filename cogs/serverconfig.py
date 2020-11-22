@@ -37,6 +37,7 @@ class ServerConfig(commands.Cog):
             await ctx.send(embed=embed)
 
     @commands.check(in_guild)
+    @has_permissions(manage_guild=True)
     @commands.command(brief='Initialises the configuration (note this overwrites previous configuration)', name='init')
     async def init_cfg(self, ctx: commands.Context):
         cursor = self.bot.db.cursor()

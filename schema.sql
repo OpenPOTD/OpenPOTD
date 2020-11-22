@@ -1,11 +1,11 @@
 CREATE TABLE IF NOT EXISTS "images" (
-	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"id"	INTEGER NOT NULL PRIMARY KEY,
 	"potd_id"	INTEGER,
 	"image"	BLOB,
 	FOREIGN KEY("potd_id") REFERENCES "problems"("id")
 );
 CREATE TABLE IF NOT EXISTS "attempts" (
-	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"id"	INTEGER NOT NULL PRIMARY KEY,
 	"user_id"	INTEGER NOT NULL,
 	"potd_id"	INTEGER NOT NULL,
 	"official"	BOOLEAN,
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS "attempts" (
 	FOREIGN KEY("potd_id") REFERENCES "problems"("id")
 );
 CREATE TABLE IF NOT EXISTS "ratings" (
-	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"id"	INTEGER NOT NULL PRIMARY KEY,
 	"userid"	INTEGER,
 	"problemid"	INTEGER,
 	"rating"	INTEGER,
@@ -23,14 +23,14 @@ CREATE TABLE IF NOT EXISTS "ratings" (
 	FOREIGN KEY("problemid") REFERENCES "problems"("id")
 );
 CREATE TABLE IF NOT EXISTS "seasons" (
-	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"id"	INTEGER NOT NULL PRIMARY KEY,
 	"running"	BOOLEAN NOT NULL,
 	"latest_potd"	INTEGER,
 	"name"	TEXT,
 	FOREIGN KEY("latest_potd") REFERENCES "problems"("id")
 );
 CREATE TABLE IF NOT EXISTS "solves" (
-	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"id"	INTEGER NOT NULL PRIMARY KEY,
 	"user"	INTEGER,
 	"problem_id"	INTEGER,
 	"num_attempts"	INTEGER,
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS "solves" (
 	FOREIGN KEY("problem_id") REFERENCES "problems"("id")
 );
 CREATE TABLE IF NOT EXISTS "rankings" (
-	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"id"	INTEGER NOT NULL PRIMARY KEY,
 	"season_id"	INTEGER,
 	"user_id"	INTEGER,
 	"rank"	INTEGER,
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS "users" (
 	PRIMARY KEY("discord_id")
 );
 CREATE TABLE IF NOT EXISTS "problems" (
-	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"id"	INTEGER NOT NULL PRIMARY KEY,
 	"date"	DATE NOT NULL,
 	"season"	INTEGER NOT NULL,
 	"statement"	TEXT NOT NULL,
@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS "config" (
 CREATE TABLE IF NOT EXISTS "stats_messages" (
 	"id"	INTEGER,
 	"potd_id"	INTEGER,
+	"server_id"     INTEGER,
+	"channel_id"    INTEGER,
 	"message_id"	INTEGER,
 	FOREIGN KEY("potd_id") REFERENCES "problems"("id"),
 	PRIMARY KEY("id")

@@ -51,6 +51,7 @@ class Management(commands.Cog):
                 if potd_channel is not None:
                     self.bot.loop.create_task(potd_channel.send(f'Sorry! We are running late on the {server[4].lower()}'
                                                                 f'otd today. '))
+                    self.logger.info(f'Informed server {server[0]} that there is no problem today.')
             return
 
         # Grab the potd
@@ -61,8 +62,10 @@ class Management(commands.Cog):
             # Post the problem
             try:
                 await problem.post(self.bot, server[1], server[2])
-            except Exception:
-                self.logger.warning(f'Server {server[0]} channel doesn\'t exist.')
+                self.logger.info(f'Posted in server {server[0]}. ')
+            except Exception as e:
+                self.logger.warning(e)
+                self.logger.warning(f'No such channel {server[1]}. ')
 
             # Remove the solved role from everyone
             role_id = server[3]
@@ -84,9 +87,6 @@ class Management(commands.Cog):
 
         # Make the new potd publicly available
         cursor.execute('UPDATE problems SET public = ? WHERE id = ?', (True, potd_id))
-
-        # Clear cooldowns from the previous question
-        self.bot.get_cog('Interface').cooldowns.clear()
 
         # Commit db
         self.bot.db.commit()
