@@ -11,6 +11,9 @@ base_points: 1000
 # Scheduled posting time of POTDs
 posting_time:
 
+# Do we want to have cooldowns?
+cooldown: True
+
 # Who's authorised to use bot commands?
 authorised:
 
@@ -21,4 +24,4 @@ otd_prefix: "P"
 cogs:
   - cogs.management
   - cogs.interface
-  - cogs.serverconfig
+  - cogs.serverconfig 

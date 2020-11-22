@@ -1,6 +1,8 @@
 import io
 import logging
+import math
 from datetime import datetime
+import datetime as dt
 
 import discord
 from discord.ext import commands
@@ -19,6 +21,7 @@ class Interface(commands.Cog):
     def __init__(self, bot: openpotd.OpenPOTD):
         self.bot = bot
         self.logger = logging.getLogger('interface')
+        self.cooldowns = {}
 
     @commands.command()
     @commands.check(lambda ctx: False)  # This command is disabled since it only applies for multi-server config
@@ -137,8 +140,16 @@ class Interface(commands.Cog):
         else:
             answer = int(s)
 
-        # Get the current answer from the database
         cursor = self.bot.db.cursor()
+
+        # Check cooldowns
+        if self.bot.config['cooldown']:
+            if message.author.id in self.cooldowns and self.cooldowns[message.author.id] > datetime.utcnow():
+                await message.channel.send(f"You're on cooldown! Send another answer in "
+                                           f"{(self.cooldowns[message.author.id] - datetime.utcnow()).total_seconds():.2f} seconds. ")
+                return
+
+        # Get the current answer from the database
         cursor.execute('SELECT answer, problems.id, seasons.id from seasons left join problems '
                        'where seasons.running = ? and problems.id = seasons.latest_potd', (True,))
         correct_answer_list = cursor.fetchall()
@@ -155,6 +166,13 @@ class Interface(commands.Cog):
         else:
             correct_answer, potd_id, season_id = correct_answer_list[0][0], correct_answer_list[0][1], \
                                                  correct_answer_list[0][2]
+
+            if self.bot.config['cooldown']:
+                cursor.execute('SELECT count() from attempts where user_id = ? and potd_id = ?',
+                               (message.author.id, potd_id))
+                num_attempts = cursor.fetchall()[0][0]
+                cool_down = math.pow(1.75, num_attempts)
+                self.cooldowns[message.author.id] = datetime.utcnow() + dt.timedelta(seconds=cool_down)
 
             # Put a ranking entry in for them
             cursor.execute('INSERT or IGNORE into rankings (season_id, user_id) VALUES (?, ?)',

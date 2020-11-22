@@ -59,7 +59,10 @@ class Management(commands.Cog):
 
         for server in servers:
             # Post the problem
-            await problem.post(self.bot, server[1], server[2])
+            try:
+                await problem.post(self.bot, server[1], server[2])
+            except Exception:
+                self.logger.warning(f'Server {server[0]} channel doesn\'t exist.')
 
             # Remove the solved role from everyone
             role_id = server[3]
@@ -81,6 +84,9 @@ class Management(commands.Cog):
 
         # Make the new potd publicly available
         cursor.execute('UPDATE problems SET public = ? WHERE id = ?', (True, potd_id))
+
+        # Clear cooldowns from the previous question
+        self.bot.get_cog('Interface').cooldowns.clear()
 
         # Commit db
         self.bot.db.commit()
