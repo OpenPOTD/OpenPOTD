@@ -216,23 +216,26 @@ class Interface(commands.Cog):
                 await message.channel.send(f'Thank you! You solved the problem after {num_attempts} attempts. ')
 
                 # Give them the "solved" role
-                role_id = self.bot.config['solved_role_id']
-                if role_id is not None:
-                    for guild in self.bot.guilds:
-                        if guild.get_role(role_id) is not None:
-                            member = guild.get_member(message.author.id)
-                            if member is not None:
-                                await member.add_roles(guild.get_role(role_id),
-                                                       reason=f'Solved {self.bot.config["otd_prefix"].lower()}otd')
-                            else:
-                                self.logger.warning(
-                                    f'User {message.author.id} solved the {self.bot.config["otd_prefix"]}OTD despite not being '
-                                    f'in the server. ')
-                            break
-                    else:
-                        self.logger.error('No guild found with a role matching the id set in solved_role_id!')
-                else:
-                    self.logger.warning('Config variable solved_role_id is not set!')
+                cursor.execute('SELECT server_id, solved_role_id from config where solved_role_id is not null')
+                servers = cursor.fetchall()
+
+                for server in servers:
+                    guild: discord.Guild = self.bot.get_guild(server[0])
+                    if guild is None:
+                        continue
+
+                    member: discord.Member = guild.get_member(message.author.id)
+                    if member is None:
+                        continue
+
+                    solved_role: discord.Role = guild.get_role(server[1])
+                    if solved_role is None:
+                        continue
+
+                    try:
+                        await member.add_roles(solved_role, reason=f'Solved POTD')
+                    except Exception as e:
+                        self.logger.warning(e)
 
                 # Logged that they solved it
                 self.logger.info(
