@@ -74,7 +74,8 @@ class Management(commands.Cog):
                     if guild.get_role(role_id) is not None:
                         role = guild.get_role(role_id)
                         for member in role.members:
-                            await member.remove_roles(role)
+                            if member.id not in authorised_set:
+                                await member.remove_roles(role)
                 except Exception as e:
                     self.logger.warning(f'Server {server[0]}, {e}')
 
