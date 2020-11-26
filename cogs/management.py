@@ -120,7 +120,7 @@ class Management(commands.Cog):
         cursor.execute('''INSERT INTO problems ("date", season, statement, answer, public) VALUES (?, ?, ?, ?, ?)''',
                        (prob_date_parsed, season, statement, answer, False))
         self.bot.db.commit()
-        await ctx.send('Added problem. ')
+        await ctx.send(f'Added problem. ID: `{cursor.lastrowid}`.')
         self.logger.info(f'{ctx.author.id} added a new problem. ')
 
     @commands.command()
