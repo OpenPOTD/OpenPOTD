@@ -2,7 +2,7 @@
 
 OpenPOTD is an open source POTD manager discord bot
 built to grade short answer and multichoice problems.
-At the moment OpenPOTD works but is has very little
+At the moment OpenPOTD works, but has very few
 features. 
 
 ## Running OpenPOTD
