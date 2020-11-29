@@ -287,6 +287,18 @@ class Management(commands.Cog):
         self.bot.db.commit()
         await ctx.send('Done!')
 
+    @commands.command()
+    @commands.is_owner()
+    async def announce(self, ctx, *, message):
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT potd_channel from config where potd_channel is not null')
+        potd_channels = [x[0] for x in cursor.fetchall()]
+
+        for channel_id in potd_channels:
+            channel: discord.TextChannel = self.bot.get_channel(channel_id)
+            if channel is not None:
+                await channel.send(message)
+
 
 def setup(bot: openpotd.OpenPOTD):
     bot.add_cog(Management(bot))
