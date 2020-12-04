@@ -134,6 +134,19 @@ class ServerConfig(commands.Cog):
         self.bot.db.commit()
         await ctx.send('Set successfully!')
 
+    @commands.check(in_guild)
+    @has_permissions(manage_guild=True)
+    @commands.command(brief='Sets the prize roles. ')
+    async def medal_roles(self, ctx, bronze: discord.Role, silver: discord.Role, gold: discord.Role):
+        cursor = self.bot.db.cursor()
+        if not (bronze.guild == ctx.guild and silver.guild == ctx.guild and gold.guild == ctx.guild):
+            await ctx.send('Invalid roles!')
+            return
+        cursor.execute('UPDATE config SET bronze_role_id = ?, silver_role_id = ?, gold_role_id = ? WHERE server_id = ?',
+                       (bronze.id, silver.id, gold.id, ctx.guild.id))
+        self.bot.db.commit()
+        await ctx.send('Set successfully!')
+
 
 def setup(bot: openpotd.OpenPOTD):
     bot.add_cog(ServerConfig(bot))

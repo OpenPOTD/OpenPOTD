@@ -299,6 +299,88 @@ class Management(commands.Cog):
             if channel is not None:
                 await channel.send(message)
 
+    @commands.command()
+    @commands.check(authorised)
+    async def set_cutoffs(self, ctx, season: int, bronze: int, silver: int, gold: int):
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT EXISTS (select 1 from seasons where id = ?)', (season,))
+        season_exists = cursor.fetchall()[0][0]
+        if season_exists:
+            cursor.execute('UPDATE seasons SET bronze_cutoff = ?, silver_cutoff = ?, gold_cutoff = ? WHERE id = ?',
+                           (bronze, silver, gold, season))
+            self.bot.db.commit()
+            await ctx.send('Done!')
+        else:
+            await ctx.send('No season with that ID!')
+
+    @commands.command()
+    @commands.check(authorised)
+    async def assign_roles(self, ctx, season: int):
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT bronze_cutoff, silver_cutoff, gold_cutoff from seasons WHERE id = ?', (season,))
+        result = cursor.fetchall()
+
+        if len(result) == 0:
+            await ctx.send('No such season!')
+            return
+
+        cutoffs = result[0]
+        cursor.execute('SELECT server_id, bronze_role_id, silver_role_id, gold_role_id from config')
+        servers = cursor.fetchall()
+
+        cursor.execute('SELECT user_id from rankings where season_id = ? and score > ? and score < ?',
+                       (season, cutoffs[0], cutoffs[1]))
+        bronzes = [x[0] for x in cursor.fetchall()]
+
+        cursor.execute('SELECT user_id from rankings where season_id = ? and score > ? and score < ?',
+                       (season, cutoffs[1], cutoffs[2]))
+        silvers = [x[0] for x in cursor.fetchall()]
+
+        cursor.execute('SELECT user_id from rankings where season_id = ? and score > ?',
+                       (season, cutoffs[2]))
+        golds = [x[0] for x in cursor.fetchall()]
+        medallers = [bronzes, silvers, golds]
+
+        for server in servers:
+            server_id = server[0]
+            guild: discord.Guild = self.bot.get_guild(server_id)
+
+            if guild is None:
+                self.logger.warning(f'[{server_id}] Trying to assign roles: No such guild {server_id}')
+                continue
+
+            self_member: discord.Member = guild.get_member(self.bot.user.id)
+            if not discord.Permissions.manage_roles.flag & self_member.guild_permissions.value:
+                self.logger.warning(f'[{server_id}] Trying to assign roles: No permissions in guild {server_id}')
+                continue
+
+            # Clear all the bronze, silver and gold roles
+            for x in (server[1], server[2], server[3]):  # Bronze, Silver, Gold role IDs
+                if x is not None:
+                    medal_role: discord.Role = guild.get_role(x)
+                    if medal_role is None:
+                        self.logger.warning(f'[{server_id}] Trying to assign roles: Guild {server_id} has no role {x}')
+                        continue
+                    for user in medal_role.members:
+                        user: discord.Member
+                        await user.remove_roles(medal_role)
+            self.logger.info(f'[{server_id}] Removed all medal roles from guild {server_id}')
+
+            # Give roles
+            for x in range(3):
+                if server[x + 1] is not None:
+                    medal_role: discord.Role = guild.get_role(server[x + 1])
+                    if medal_role is None:
+                        self.logger.warning(f'[{server_id}] No role {medal_role} ({x})')
+                        continue
+                    for user_id in medallers[x]:
+                        if guild.get_member(user_id) is not None:
+                            member: discord.Member = guild.get_member(user_id)
+                            await member.add_roles(medal_role)
+                            self.logger.info(f'[{server_id}] Gave {user_id} role {medal_role.name}')
+
+        await ctx.send('Done!')
+
 
 def setup(bot: openpotd.OpenPOTD):
     bot.add_cog(Management(bot))

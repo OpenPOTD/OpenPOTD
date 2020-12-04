@@ -6,7 +6,6 @@ import datetime as dt
 
 import discord
 from discord.ext import commands
-import dpymenus
 
 import openpotd
 import shared
