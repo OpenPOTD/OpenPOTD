@@ -322,13 +322,12 @@ class Interface(commands.Cog):
         else:
             pages = []
             for i in range(len(rankings) // 20 + 1):
-                page = dpymenus.Page(title=f'{szn_name} rankings - Page {i + 1}')
+                page = discord.Embed(title=f'{szn_name} rankings - Page {i + 1}')
                 scores = '\n'.join(
                     [f'{rank}. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20 * i:20 * i + 20]])
                 page.description = scores
                 pages.append(page)
-            menu = dpymenus.PaginatedMenu(ctx).set_timeout(60).add_pages(pages).persist_on_close()
-            await menu.open()
+            await self.bot.get_cog('MenuManager').new_menu(ctx, pages)
 
     @commands.command()
     async def fetch(self, ctx, date_or_id):
