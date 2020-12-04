@@ -33,7 +33,10 @@ class ServerConfig(commands.Cog):
                                 f'`2. ping_role_id:` {result[2]} [<@&{result[2]}>]\n' \
                                 f'`3. solved_role_id:` {result[3]} [<@&{result[3]}>]\n' \
                                 f'`4. otd_prefix:` {result[4]}\n' \
-                                f'`5. command_prefix:` {result[5]}\n'
+                                f'`5. command_prefix:` {result[5]}\n' \
+                                f'`6. Bronze Role:` [<@&{result[6]}>]\n' \
+                                f'`7. Silver Role:` [<@&{result[7]}>]\n' \
+                                f'`8. Gold Role:` [<@&{result[8]}>]'
             await ctx.send(embed=embed)
 
     @commands.check(in_guild)
