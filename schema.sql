@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS "seasons" (
 	"running"	BOOLEAN NOT NULL,
 	"latest_potd"	INTEGER,
 	"name"	TEXT,
+	"bronze_cutoff" INTEGER,
+	"silver_cutoff" INTEGER,
+	"gold_cutoff"   INTEGER,
 	FOREIGN KEY("latest_potd") REFERENCES "problems"("id")
 );
 CREATE TABLE IF NOT EXISTS "solves" (
@@ -75,6 +78,9 @@ CREATE TABLE IF NOT EXISTS "config" (
 	"solved_role_id"	INTEGER,
 	"otd_prefix"	TEXT,
 	"command_prefix"	TEXT,
+	"bronze_role_id"    INTEGER,
+	"silver_role_id"    INTEGER,
+	"gold_role_id"  INTEGER,
 	PRIMARY KEY("server_id")
 );
 CREATE TABLE IF NOT EXISTS "stats_messages" (
