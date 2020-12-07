@@ -216,7 +216,7 @@ class Management(commands.Cog):
                    'difficulty', 'weighted_solves', 'base_points', 'answer', 'public', 'source']
         embed = discord.Embed(title=f'{self.bot.config["otd_prefix"]}OTD {result[0][0]}')
         for i in range(len(columns)):
-            embed.add_field(name=columns[i], value=result[0][i], inline=False)
+            embed.add_field(name=columns[i], value=f'`{result[0][i]}`', inline=False)
         await ctx.send(embed=embed)
 
     @commands.command()
