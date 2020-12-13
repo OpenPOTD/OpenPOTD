@@ -40,11 +40,25 @@ class Management(commands.Cog):
                        'WHERE potd_channel IS NOT NULL')
         servers = cursor.fetchall()
 
-        cursor.execute('SELECT problems.id, difficulty from (seasons left join problems on seasons.running = ? '
+        cursor.execute('SELECT problems.id, difficulty from (seasons inner join problems on seasons.running = ? '
                        'and seasons.id = problems.season and problems.date = ? ) where problems.id IS NOT NULL',
                        (True, str(date.today())))
         result = cursor.fetchall()
 
+        cursor.execute('SELECT EXISTS (SELECT * from seasons where seasons.running = ?)', (True,))
+        running_seasons_exists = cursor.fetchall()[0][0]
+
+        # If there's no running season at all then it isn't really "running late" more like just
+        # not even having a season
+        if not running_seasons_exists:
+            for server in servers:
+                potd_channel = self.bot.get_channel(server[1])
+                if potd_channel is not None:
+                    self.bot.loop.create_task(potd_channel.send(f'There is no season in session today. '))
+                    self.logger.info(f'Informed server {server[0]} that there is no season today.')
+            return
+
+        # If there's a running season but no problem then say
         if len(result) == 0 or result[0][0] is None:
             for server in servers:
                 potd_channel = self.bot.get_channel(server[1])
