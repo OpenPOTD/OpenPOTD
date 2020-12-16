@@ -11,6 +11,7 @@ from discord.ext import commands
 from discord.ext import flags
 
 import openpotd
+import shared
 
 authorised_set = set()
 
@@ -32,59 +33,65 @@ class Management(commands.Cog):
         self.bot.loop.create_task(self.advance_potd())
 
     async def advance_potd(self):
-        print(f'Advancing {self.bot.config["otd_prefix"]}OTD at {datetime.now()}')
+        self.logger.info(f'Advancing POTD at {datetime.now()}')
         cursor = self.bot.db.cursor()
-        cursor.execute('SELECT problems.id, difficulty, seasons.name, seasons.id from (seasons left join problems on '
-                       'seasons.running = ? and seasons.id = problems.season and problems.date = ? ) where '
-                       'problems.id IS NOT NULL',
+
+        cursor.execute('SELECT server_id, potd_channel, ping_role_id, solved_role_id, otd_prefix from config '
+                       'WHERE potd_channel IS NOT NULL')
+        servers = cursor.fetchall()
+
+        cursor.execute('SELECT problems.id, difficulty from (seasons inner join problems on seasons.running = ? '
+                       'and seasons.id = problems.season and problems.date = ? ) where problems.id IS NOT NULL',
                        (True, str(date.today())))
         result = cursor.fetchall()
-        potd_channel = self.bot.get_channel(self.bot.config['potd_channel'])
-        if len(result) == 0 or result[0][0] is None:
-            await potd_channel.send(
-                f'Sorry! We are running late on the {self.bot.config["otd_prefix"].lower()}otd today. ')
+
+        cursor.execute('SELECT EXISTS (SELECT * from seasons where seasons.running = ?)', (True,))
+        running_seasons_exists = cursor.fetchall()[0][0]
+
+        # If there's no running season at all then it isn't really "running late" more like just
+        # not even having a season
+        if not running_seasons_exists:
+            for server in servers:
+                potd_channel = self.bot.get_channel(server[1])
+                if potd_channel is not None:
+                    self.bot.loop.create_task(potd_channel.send(f'There is no season in session today. '))
+                    self.logger.info(f'Informed server {server[0]} that there is no season today.')
             return
 
-        # Get the number of the problem in that season
-        cursor.execute('SELECT COUNT(1) from problems where problems.season = ? and date(problems.date) < date(?)',
-                       (result[0][3], str(date.today())))
-        problem_number = cursor.fetchall()[0][0]
+        # If there's a running season but no problem then say
+        if len(result) == 0 or result[0][0] is None:
+            for server in servers:
+                potd_channel = self.bot.get_channel(server[1])
+                if potd_channel is not None:
+                    self.bot.loop.create_task(potd_channel.send(f'Sorry! We are running late on the {server[4].lower()}'
+                                                                f'otd today. '))
+                    self.logger.info(f'Informed server {server[0]} that there is no problem today.')
+            return
 
-        # Send the potd
+        # Grab the potd
         potd_id = result[0][0]
-        season_name = result[0][2]
-        cursor.execute('SELECT images.image from images where images.potd_id = ?', (potd_id,))
-        images = cursor.fetchall()
-        if len(images) == 0:
-            await potd_channel.send(f'**{season_name} - {self.bot.config["otd_prefix"]}{problem_number}** '
-                                    f'[No Picture]')
-            # Should probably warn?
-            self.logger.warning(f'No picture linked to potd {potd_id} just posted. ')
-        else:
-            await potd_channel.send(f'**{season_name} - {self.bot.config["otd_prefix"]}{problem_number}** ',
-                                    file=discord.File(io.BytesIO(images[0][0]),
-                                                      filename=f'POTD-{potd_id}-0.png'))
-            for i in range(1, len(images)):
-                await potd_channel.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
+        problem = shared.POTD(result[0][0], self.bot.db)
 
-        potd_role_id = self.bot.config['ping_role_id']
-        if potd_role_id is not None:
-            await potd_channel.send(f'DM your answers to me! <@&{potd_role_id}>')
-        else:
-            await potd_channel.send(f'DM your answers to me!')
-            self.logger.warning('Config variable ping_role_id is not set! ')
+        for server in servers:
+            # Post the problem
+            try:
+                await problem.post(self.bot, server[1], server[2])
+            except Exception:
+                self.logger.warning(f'Server {server[0]} channel doesn\'t exist.')
 
-        # Construct embed and send
-        embed = discord.Embed(title=f'{self.bot.config["otd_prefix"]}oTD {potd_id} Stats')
-        embed.add_field(name='Difficulty', value=result[0][1])
-        embed.add_field(name='Weighted Solves', value='0')
-        embed.add_field(name='Base Points', value='0')
-        embed.add_field(name='Solves (official)', value='0')
-        embed.add_field(name='Solves (unofficial)', value='0')
-        stats_message = await potd_channel.send(embed=embed)
-
-        # Update stats embed in db
-        cursor.execute('UPDATE problems SET stats_message_id = ? WHERE problems.id = ?', (stats_message.id, potd_id))
+            # Remove the solved role from everyone
+            role_id = server[3]
+            if role_id is not None:
+                try:
+                    self.bot.logger.warning('Config variable solved_role_id is not set!')
+                    guild = self.bot.get_guild(server[0])
+                    if guild.get_role(role_id) is not None:
+                        role = guild.get_role(role_id)
+                        for member in role.members:
+                            if member.id not in authorised_set:
+                                await member.remove_roles(role)
+                except Exception as e:
+                    self.logger.warning(f'Server {server[0]}, {e}')
 
         # Advance the season
         cursor.execute('SELECT season FROM problems WHERE id = ?', (potd_id,))
@@ -94,18 +101,8 @@ class Management(commands.Cog):
         # Make the new potd publicly available
         cursor.execute('UPDATE problems SET public = ? WHERE id = ?', (True, potd_id))
 
-        # Remove the solved role from everyone
-        role_id = self.bot.config['solved_role_id']
-        if role_id is not None:
-            self.bot.logger.warning('Config variable solved_role_id is not set!')
-            for guild in self.bot.guilds:
-                if guild.get_role(role_id) is not None:
-                    role = guild.get_role(role_id)
-                    for member in role.members:
-                        await member.remove_roles(role)
-                    break
-            else:
-                self.bot.logger.error('No guild found with a role matching the id set in solved_role_id!')
+        # Clear cooldowns from the previous question
+        self.bot.get_cog('Interface').cooldowns.clear()
 
         # Commit db
         self.bot.db.commit()
@@ -137,7 +134,7 @@ class Management(commands.Cog):
         cursor.execute('''INSERT INTO problems ("date", season, statement, answer, public) VALUES (?, ?, ?, ?, ?)''',
                        (prob_date_parsed, season, statement, answer, False))
         self.bot.db.commit()
-        await ctx.send('Added problem. ')
+        await ctx.send(f'Added problem. ID: `{cursor.lastrowid}`.')
         self.logger.info(f'{ctx.author.id} added a new problem. ')
 
     @commands.command()
@@ -216,7 +213,7 @@ class Management(commands.Cog):
         self.bot.db.commit()
         await ctx.send(f'Updated {self.bot.config["otd_prefix"].lower()}otd. ')
 
-    @commands.command()
+    @commands.command(name='pinfo')
     @commands.check(authorised)
     async def info(self, ctx, potd):
         cursor = self.bot.db.cursor()
@@ -234,7 +231,7 @@ class Management(commands.Cog):
                    'difficulty', 'weighted_solves', 'base_points', 'answer', 'public', 'source']
         embed = discord.Embed(title=f'{self.bot.config["otd_prefix"]}OTD {result[0][0]}')
         for i in range(len(columns)):
-            embed.add_field(name=columns[i], value=result[0][i], inline=False)
+            embed.add_field(name=columns[i], value=f'`{result[0][i]}`', inline=False)
         await ctx.send(embed=embed)
 
     @commands.command()
@@ -276,15 +273,6 @@ class Management(commands.Cog):
             await ctx.send(f'Season {season} already stopped!')
 
     @commands.command()
-    @commands.check(authorised)
-    async def otd_prefix(self, ctx, new_otd_prefix: str = None):
-        if new_otd_prefix is None:
-            await ctx.send(f'The current OTD prefix is {self.bot.config["otd_prefix"]}.')
-        else:
-            self.bot.config["otd_prefix"] = new_otd_prefix.upper()
-            await ctx.send(f'OTD prefix has been changed to {self.bot.config["otd_prefix"]}')
-
-    @commands.command()
     @commands.is_owner()
     async def execute_sql(self, ctx, *, sql):
         cursor = self.bot.db.cursor()
@@ -311,6 +299,100 @@ class Management(commands.Cog):
 
         cursor.executemany('UPDATE users SET nickname = ? where discord_id = ?', to_update)
         self.bot.db.commit()
+        await ctx.send('Done!')
+
+    @commands.command()
+    @commands.is_owner()
+    async def announce(self, ctx, *, message):
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT potd_channel from config where potd_channel is not null')
+        potd_channels = [x[0] for x in cursor.fetchall()]
+
+        for channel_id in potd_channels:
+            channel: discord.TextChannel = self.bot.get_channel(channel_id)
+            if channel is not None:
+                await channel.send(message)
+
+    @commands.command()
+    @commands.check(authorised)
+    async def set_cutoffs(self, ctx, season: int, bronze: int, silver: int, gold: int):
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT EXISTS (select 1 from seasons where id = ?)', (season,))
+        season_exists = cursor.fetchall()[0][0]
+        if season_exists:
+            cursor.execute('UPDATE seasons SET bronze_cutoff = ?, silver_cutoff = ?, gold_cutoff = ? WHERE id = ?',
+                           (bronze, silver, gold, season))
+            self.bot.db.commit()
+            await ctx.send('Done!')
+        else:
+            await ctx.send('No season with that ID!')
+
+    @commands.command()
+    @commands.check(authorised)
+    async def assign_roles(self, ctx, season: int):
+        cursor = self.bot.db.cursor()
+        cursor.execute('SELECT bronze_cutoff, silver_cutoff, gold_cutoff from seasons WHERE id = ?', (season,))
+        result = cursor.fetchall()
+
+        if len(result) == 0:
+            await ctx.send('No such season!')
+            return
+
+        cutoffs = result[0]
+        cursor.execute('SELECT server_id, bronze_role_id, silver_role_id, gold_role_id from config')
+        servers = cursor.fetchall()
+
+        cursor.execute('SELECT user_id from rankings where season_id = ? and score > ? and score < ?',
+                       (season, cutoffs[0], cutoffs[1]))
+        bronzes = [x[0] for x in cursor.fetchall()]
+
+        cursor.execute('SELECT user_id from rankings where season_id = ? and score > ? and score < ?',
+                       (season, cutoffs[1], cutoffs[2]))
+        silvers = [x[0] for x in cursor.fetchall()]
+
+        cursor.execute('SELECT user_id from rankings where season_id = ? and score > ?',
+                       (season, cutoffs[2]))
+        golds = [x[0] for x in cursor.fetchall()]
+        medallers = [bronzes, silvers, golds]
+
+        for server in servers:
+            server_id = server[0]
+            guild: discord.Guild = self.bot.get_guild(server_id)
+
+            if guild is None:
+                self.logger.warning(f'[{server_id}] Trying to assign roles: No such guild {server_id}')
+                continue
+
+            self_member: discord.Member = guild.get_member(self.bot.user.id)
+            if not discord.Permissions.manage_roles.flag & self_member.guild_permissions.value:
+                self.logger.warning(f'[{server_id}] Trying to assign roles: No permissions in guild {server_id}')
+                continue
+
+            # Clear all the bronze, silver and gold roles
+            for x in (server[1], server[2], server[3]):  # Bronze, Silver, Gold role IDs
+                if x is not None:
+                    medal_role: discord.Role = guild.get_role(x)
+                    if medal_role is None:
+                        self.logger.warning(f'[{server_id}] Trying to assign roles: Guild {server_id} has no role {x}')
+                        continue
+                    for user in medal_role.members:
+                        user: discord.Member
+                        await user.remove_roles(medal_role)
+            self.logger.info(f'[{server_id}] Removed all medal roles from guild {server_id}')
+
+            # Give roles
+            for x in range(3):
+                if server[x + 1] is not None:
+                    medal_role: discord.Role = guild.get_role(server[x + 1])
+                    if medal_role is None:
+                        self.logger.warning(f'[{server_id}] No role {medal_role} ({x})')
+                        continue
+                    for user_id in medallers[x]:
+                        if guild.get_member(user_id) is not None:
+                            member: discord.Member = guild.get_member(user_id)
+                            await member.add_roles(medal_role)
+                            self.logger.info(f'[{server_id}] Gave {user_id} role {medal_role.name}')
+
         await ctx.send('Done!')
 
 

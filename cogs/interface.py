@@ -1,10 +1,11 @@
 import io
 import logging
+import math
 from datetime import datetime
+import datetime as dt
 
 import discord
 from discord.ext import commands
-import dpymenus
 
 import openpotd
 import shared
@@ -19,6 +20,7 @@ class Interface(commands.Cog):
     def __init__(self, bot: openpotd.OpenPOTD):
         self.bot = bot
         self.logger = logging.getLogger('interface')
+        self.cooldowns = {}
 
     @commands.command()
     @commands.check(lambda ctx: False)  # This command is disabled since it only applies for multi-server config
@@ -100,30 +102,21 @@ class Interface(commands.Cog):
         self.bot.db.commit()
 
     async def update_embed(self, potd_id: int):
-        # Find the message ID in the database
         cursor = self.bot.db.cursor()
-        cursor.execute('SELECT stats_message_id from problems where problems.id = ?', (potd_id,))
-        result = cursor.fetchall()
-        if len(result) == 0:
-            self.logger.error(f'No problem with id {potd_id}. Failed to refresh. ')
-            return
-        message_id = result[0][0]
-        if message_id is None:
-            self.logger.warning(f'No stats message registered for potd {potd_id}. ')
-            return
+        cursor.execute('SELECT config.server_id, potd_channel, otd_prefix, message_id from config left join '
+                       'stats_messages ON config.server_id = stats_messages.server_id WHERE stats_messages.id '
+                       'is NOT NULL and stats_messages.potd_id = ?;', (potd_id,))
+        servers = cursor.fetchall()
 
-        # Find the correct channel
-        channel = self.bot.get_channel(self.bot.config['potd_channel'])
-        if channel is None:
-            self.logger.error(f'Could not find potd_channel {self.bot.config["potd_channel"]}')
-            return
-        message = await channel.fetch_message(message_id)
+        problem = shared.POTD(potd_id, self.bot.db)
 
-        # Construct the new embed
-        new_embed = self.build_embed(potd_id, False)
-
-        # Update the message
-        await message.edit(embed=new_embed)
+        for server_data in servers:
+            potd_channel: discord.TextChannel = self.bot.get_channel(server_data[1])
+            if potd_channel is not None:
+                stats_message = await potd_channel.fetch_message(server_data[3])
+                if stats_message is not None:
+                    embed = problem.build_embed(self.bot.db, False, server_data[2])
+                    await stats_message.edit(embed=embed)
 
     def refresh(self, season: int, potd_id: int):
         # Update the rankings in the db
@@ -146,8 +139,16 @@ class Interface(commands.Cog):
         else:
             answer = int(s)
 
-        # Get the current answer from the database
         cursor = self.bot.db.cursor()
+
+        # Check cooldowns
+        if self.bot.config['cooldown']:
+            if message.author.id in self.cooldowns and self.cooldowns[message.author.id] > datetime.utcnow():
+                await message.channel.send(f"You're on cooldown! Send another answer in "
+                                           f"{(self.cooldowns[message.author.id] - datetime.utcnow()).total_seconds():.2f} seconds. ")
+                return
+
+        # Get the current answer from the database
         cursor.execute('SELECT answer, problems.id, seasons.id from seasons left join problems '
                        'where seasons.running = ? and problems.id = seasons.latest_potd', (True,))
         correct_answer_list = cursor.fetchall()
@@ -164,6 +165,13 @@ class Interface(commands.Cog):
         else:
             correct_answer, potd_id, season_id = correct_answer_list[0][0], correct_answer_list[0][1], \
                                                  correct_answer_list[0][2]
+
+            if self.bot.config['cooldown']:
+                cursor.execute('SELECT count() from attempts where user_id = ? and potd_id = ?',
+                               (message.author.id, potd_id))
+                num_attempts = cursor.fetchall()[0][0]
+                cool_down = math.pow(1.75, num_attempts)
+                self.cooldowns[message.author.id] = datetime.utcnow() + dt.timedelta(seconds=cool_down)
 
             # Put a ranking entry in for them
             cursor.execute('INSERT or IGNORE into rankings (season_id, user_id) VALUES (?, ?)',
@@ -207,23 +215,26 @@ class Interface(commands.Cog):
                 await message.channel.send(f'Thank you! You solved the problem after {num_attempts} attempts. ')
 
                 # Give them the "solved" role
-                role_id = self.bot.config['solved_role_id']
-                if role_id is not None:
-                    for guild in self.bot.guilds:
-                        if guild.get_role(role_id) is not None:
-                            member = guild.get_member(message.author.id)
-                            if member is not None:
-                                await member.add_roles(guild.get_role(role_id),
-                                                       reason=f'Solved {self.bot.config["otd_prefix"].lower()}otd')
-                            else:
-                                self.logger.warning(
-                                    f'User {message.author.id} solved the {self.bot.config["otd_prefix"]}OTD despite not being '
-                                    f'in the server. ')
-                            break
-                    else:
-                        self.logger.error('No guild found with a role matching the id set in solved_role_id!')
-                else:
-                    self.logger.warning('Config variable solved_role_id is not set!')
+                cursor.execute('SELECT server_id, solved_role_id from config where solved_role_id is not null')
+                servers = cursor.fetchall()
+
+                for server in servers:
+                    guild: discord.Guild = self.bot.get_guild(server[0])
+                    if guild is None:
+                        continue
+
+                    member: discord.Member = guild.get_member(message.author.id)
+                    if member is None:
+                        continue
+
+                    solved_role: discord.Role = guild.get_role(server[1])
+                    if solved_role is None:
+                        continue
+
+                    try:
+                        await member.add_roles(solved_role, reason=f'Solved POTD')
+                    except Exception as e:
+                        self.logger.warning(e)
 
                 # Logged that they solved it
                 self.logger.info(
@@ -311,40 +322,12 @@ class Interface(commands.Cog):
         else:
             pages = []
             for i in range(len(rankings) // 20 + 1):
-                page = dpymenus.Page(title=f'{szn_name} rankings - Page {i + 1}')
+                page = discord.Embed(title=f'{szn_name} rankings - Page {i + 1}')
                 scores = '\n'.join(
                     [f'{rank}. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20 * i:20 * i + 20]])
                 page.description = scores
                 pages.append(page)
-            menu = dpymenus.PaginatedMenu(ctx).set_timeout(60).add_pages(pages).persist_on_close()
-            await menu.open()
-
-    def build_embed(self, problem_id, full_stats: bool):
-        cursor = self.bot.db.cursor()
-        cursor.execute('SELECT date, season, difficulty, weighted_solves, base_points from problems where '
-                       'problems.id = ? and problems.public = ?', (problem_id, True))
-        result = cursor.fetchall()
-        if len(result) == 0:
-            raise Exception('No such potd available.')
-        potd_information = result[0]
-
-        cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (problem_id, True))
-        official_solves = cursor.fetchall()[0][0]
-        cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (problem_id, False))
-        unofficial_solves = cursor.fetchall()[0][0]
-
-        embed = discord.Embed(title=f'{self.bot.config["otd_prefix"]}oTD {problem_id} Stats')
-
-        if full_stats:
-            embed.add_field(name='Date', value=potd_information[0])
-            embed.add_field(name='Season', value=potd_information[1])
-
-        embed.add_field(name='Difficulty', value=potd_information[2])
-        embed.add_field(name='Weighted Solves', value=f'{potd_information[3]:.2f}')
-        embed.add_field(name='Base Points', value=f'{potd_information[4]:.2f}')
-        embed.add_field(name='Solves (official)', value=official_solves)
-        embed.add_field(name='Solves (unofficial)', value=unofficial_solves)
-        return embed
+            await self.bot.get_cog('MenuManager').new_menu(ctx, pages)
 
     @commands.command()
     async def fetch(self, ctx, date_or_id):
@@ -490,6 +473,20 @@ class Interface(commands.Cog):
         else:
             cursor.execute('UPDATE users SET anonymous = ? WHERE discord_id = ?', (not result[0][0], ctx.author.id))
             self.bot.db.commit()
+
+    @commands.command(brief='Some information about the bot. ')
+    async def info(self, ctx):
+        embed = discord.Embed(description='OpenPOTD is a bot that posts short answer questions once a day for you '
+                                          'to solve. OpenPOTD is open-source, and you can find our GitHub repository '
+                                          'at https://github.com/IcosahedralDice/OpenPOTD. \n'
+                                          'Have a bug report? Want to propose some problems? Join the OpenPOTD '
+                                          'development server at https://discord.gg/ub2Y8b8zpt. \n'
+                                          'Get the OpenPOTD manual with the `manual` command. ')
+        await ctx.send(embed=embed)
+
+    @commands.command(brief='Download the OpenPOTD manual. ')
+    async def manual(self, ctx):
+        await ctx.send('OpenPOTD Manual: ', file=discord.File('openpotd-manual.pdf'))
 
 
 def setup(bot: openpotd.OpenPOTD):

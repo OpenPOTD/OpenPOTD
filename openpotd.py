@@ -14,12 +14,21 @@ import sqlite3
 cfgfile = open("config/config.yml")
 config = yaml.safe_load(cfgfile)
 
+prefixes = {}
+
+
+def get_prefix(bot, message: discord.Message):
+    if message.guild is None or message.guild.id not in prefixes:
+        return config['prefix']
+    else:
+        return prefixes[message.guild.id]
+
 
 class OpenPOTD(commands.Bot):
-    def __init__(self, prefix):
+    def __init__(self):
         intents = discord.Intents.default()
         intents.members = True
-        super().__init__(prefix, intents=intents)
+        super().__init__(get_prefix, intents=intents)
         self.config = config
         self.db = sqlite3.connect('data/data.db')
         logging.basicConfig(level=logging.INFO, format='[%(name)s %(levelname)s] %(message)s')
@@ -31,6 +40,12 @@ class OpenPOTD(commands.Bot):
                 ))
         except IOError:
             self.blacklist = []
+
+        # Populate prefixes
+        cursor = self.db.cursor()
+        cursor.execute('SELECT server_id, command_prefix FROM config WHERE command_prefix IS NOT NULL')
+        global prefixes
+        prefixes = {x[0]: x[1] for x in cursor.fetchall()}
 
     async def on_ready(self):
         self.logger.info('Connected to Discord')
@@ -109,10 +124,11 @@ class OpenPOTD(commands.Bot):
                 await ctx.send('Huh? {}'.format(' '.join(exception.args)))
             else:
                 if error_data[0][0][0] in 'aeiouAEIOU':
-                      anindicator='n'
+                    anindicator = 'n'
                 else:
-                      anindicator=''
-                await ctx.send('Huh? I thought `{1}` was supposed to be a{2} `{0}`...'.format(*error_data[0],anindicator))
+                    anindicator = ''
+                await ctx.send(
+                    'Huh? I thought `{1}` was supposed to be a{2} `{0}`...'.format(*error_data[0], anindicator))
         else:
             info = traceback.format_exception(type(exception), exception, exception.__traceback__, chain=False)
             self.logger.error('Unhandled command exception - {}'.format(''.join(info)))
@@ -130,4 +146,4 @@ if __name__ == '__main__':
 
     x = threading.Thread(target=executor, args=(), daemon=True)
     x.start()
-    OpenPOTD(config['prefix']).run(token)
+    OpenPOTD().run(token)
