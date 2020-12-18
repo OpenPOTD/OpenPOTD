@@ -139,7 +139,8 @@ class Management(commands.Cog):
 
     @commands.command()
     @commands.check(authorised)
-    async def linkimg(self, ctx, potd: int):
+    async def linkimg(self, ctx, problem: shared.POTD):
+        potd = problem.id
         if len(ctx.message.attachments) < 1:
             await ctx.send("No attached file. ")
             return
@@ -154,43 +155,19 @@ class Management(commands.Cog):
 
     @commands.command()
     @commands.check(authorised)
-    async def showpotd(self, ctx, potd):
+    async def showpotd(self, ctx, *, problem: shared.POTD):
         """Note: this is the admin version of the command so all problems are visible. """
 
-        cursor = self.bot.db.cursor()
-        potd_date, potd_id = None, None
-        # Find the right potd for the user
-        if potd.isdecimal():  # User passed in an id
-            potd_id = potd
-            cursor.execute('''SELECT "date" from problems WHERE problems.id = ?''', (potd_id,))
-            result = cursor.fetchall()
-            try:
-                potd_date = result[0][0]
-            except IndexError:
-                await ctx.send(f'No such {self.bot.config["otd_prefix"].lower()}otd. ')
-                return
-
-        else:  # User passed in a date
-            potd_date = potd
-            cursor.execute('''SELECT id from problems WHERE date = ?''', (potd_date,))
-            result = cursor.fetchall()
-            if len(result) == 0:
-                await ctx.send(f'No such {self.bot.config["otd_prefix"]}OTD found. ')
-                return
-            else:
-                potd_id = result[0][0]
-
-        # Display the potd to the user
-        cursor.execute('''SELECT image FROM images WHERE potd_id = ?''', (potd_id,))
-        images = cursor.fetchall()
+        images = problem.images
         if len(images) == 0:
-            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date} has no picture attached. ')
+            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {problem.id} of {problem.date} has no picture '
+                           f'attached. ')
         else:
-            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date}',
-                           file=discord.File(io.BytesIO(images[0][0]),
-                                             filename=f'POTD-{potd_id}-0.png'))
+            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {problem.id} of {problem.date}',
+                           file=discord.File(io.BytesIO(images[0]),
+                                             filename=f'POTD-{problem.id}-0.png'))
             for i in range(1, len(images)):
-                await ctx.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
+                await ctx.send(file=discord.File(io.BytesIO(images[i]), filename=f'POTD-{problem.id}-{i}.png'))
 
     @flags.add_flag('--date')
     @flags.add_flag('--season', type=int)
@@ -201,7 +178,8 @@ class Management(commands.Cog):
     @flags.add_flag('--source')
     @flags.command()
     @commands.check(authorised)
-    async def update(self, ctx, potd: int, **flags):
+    async def update(self, ctx, problem: shared.POTD, **flags):
+        potd = problem.id
         cursor = self.bot.db.cursor()
         if not flags['date'] is None and not bool(re.match(r'\d\d\d\d-\d\d-\d\d', flags['date'])):
             await ctx.send('Invalid date (specify yyyy-mm-dd)')
@@ -215,23 +193,11 @@ class Management(commands.Cog):
 
     @commands.command(name='pinfo')
     @commands.check(authorised)
-    async def info(self, ctx, potd):
-        cursor = self.bot.db.cursor()
-        if potd.isdecimal():
-            cursor.execute('SELECT * FROM problems WHERE id = ?', (int(potd),))
-        else:
-            cursor.execute('SELECT * FROM problems WHERE date = ?', (potd,))
-
-        result = cursor.fetchall()
-        if len(result) == 0:
-            await ctx.send(f'No such {self.bot.config["otd_prefix"].lower()}otd. ')
-            return
-
-        columns = ['id', 'date', 'season', 'statement',
-                   'difficulty', 'weighted_solves', 'base_points', 'answer', 'public', 'source']
-        embed = discord.Embed(title=f'{self.bot.config["otd_prefix"]}OTD {result[0][0]}')
-        for i in range(len(columns)):
-            embed.add_field(name=columns[i], value=f'`{result[0][i]}`', inline=False)
+    async def info(self, ctx, problem: shared.POTD):
+        info = problem.info()
+        embed = discord.Embed(title=f'{self.bot.config["otd_prefix"]}OTD {problem.id}')
+        for i in range(len(info)):
+            embed.add_field(name=info[i][0], value=f'`{info[i][1]}`', inline=False)
         await ctx.send(embed=embed)
 
     @commands.command()

@@ -330,12 +330,11 @@ class Interface(commands.Cog):
             await self.bot.get_cog('MenuManager').new_menu(ctx, pages)
 
     @commands.command()
-    async def fetch(self, ctx, date_or_id):
-        try:
-            potd_id = shared.id_from_date_or_id(date_or_id, self.bot.db, is_public=True)
-        except Exception as e:
-            await ctx.send(e)
+    async def fetch(self, ctx, *, problem: shared.POTD):
+        if not await problem.ensure_public(ctx):
             return
+
+        potd_id = problem.id
 
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT date from problems where id = ?', (potd_id,))
@@ -358,15 +357,12 @@ class Interface(commands.Cog):
             f'User {ctx.author.id} requested {self.bot.config["otd_prefix"]}OTD with date {potd_date} and number {potd_id}. ')
 
     @commands.command()
-    async def check(self, ctx, date_or_id, answer: int):
-        # Get the POTD id
-        try:
-            potd_id = shared.id_from_date_or_id(date_or_id, self.bot.db, is_public=True)
-        except Exception as e:
-            await ctx.send(e)
+    async def check(self, ctx, problem: shared.POTD, answer: int):
+        if not await problem.ensure_public(ctx):
             return
 
         cursor = self.bot.db.cursor()
+        potd_id = problem.id
 
         # Check that it's not part of a currently running season.
         cursor.execute('SELECT name from seasons where latest_potd = ?', (potd_id,))

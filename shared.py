@@ -3,6 +3,7 @@ import re
 import sqlite3
 from datetime import date
 
+import dateparser
 import discord
 from discord.ext import commands
 import logging
@@ -22,42 +23,6 @@ def get_current_problem(conn: sqlite3.Connection):
         return None
     else:
         return POTD(result[0][0], conn)
-
-
-def id_from_date_or_id(date_or_id: str, conn: sqlite3.Connection, is_public: bool = True):
-    if bool(date_regex.match(date_or_id)):  # Then the user passed in a date
-        cursor = conn.cursor()
-        if is_public:
-            cursor.execute('SELECT id, statement from problems where date = ? and public = ?', (date_or_id, True))
-        else:
-            cursor.execute('SELECT id, statement from problems where date = ?', (date_or_id,))
-
-        result = cursor.fetchall()
-        if len(result) == 0:
-            raise Exception(f'There are no problems available for the date {date_or_id}. ')
-        elif len(result) == 2:
-            space = ' '
-
-            # Get the id and first 10 letters of each problem.
-            problems = ', '.join((f'{x[0]}: "{space.join(x[1].split(space)[:10])}..."' for x in result))
-            raise Exception(f'There are multiple problems available for the date {date_or_id}: {problems}. ')
-        else:
-            # Return the unique ID.
-            return result[0][0]
-    elif date_or_id.isdecimal():
-        potd_id = int(date_or_id)
-        cursor = conn.cursor()
-        if is_public:
-            cursor.execute('SELECT EXISTS (SELECT id from problems where problems.id = ? and public = ? limit 1)',
-                           (potd_id, True))
-        else:
-            cursor.execute('SELECT EXISTS (SELECT id from problems where problems.id = ? limit 1)', (potd_id,))
-        if cursor.fetchall()[0][0]:
-            return potd_id
-        else:
-            raise Exception(f'There are no problems available for the id {date_or_id}. ')
-    else:
-        raise Exception(f'Please enter a valid id or date. ')
 
 
 class POTD:
@@ -91,64 +56,115 @@ class POTD:
             self.logger = logging.getLogger(f'POTD {self.id}')
             self.db = db
 
-    async def post(self, bot: openpotd.OpenPOTD, channel: int, potd_role_id: int):
-        channel = bot.get_channel(channel)
-        if channel is None:
-            raise Exception('No such channel!')
-        else:
-            try:
-                identification_name = f'**{self.season_name} - #{self.season_order+1}**'
-                if len(self.images) == 0:
-                    await channel.send(
-                        f'{identification_name} of {str(date.today())} has no picture attached. ')
-                else:
-                    await channel.send(f'{identification_name} [{str(date.today())}]',
-                                       file=discord.File(io.BytesIO(self.images[0]),
-                                                         filename=f'POTD-{self.id}-0.png'))
-                    for i in range(1, len(self.images)):
-                        await channel.send(
-                            file=discord.File(io.BytesIO(self.images[i]), filename=f'POTD-{self.id}-{i}.png'))
-
-                if potd_role_id is not None:
-                    await channel.send(f'DM your answers to me! <@&{potd_role_id}>')
-                else:
-                    await channel.send(f'DM your answers to me!')
-                    logging.warning(f'Config variable ping_role_id is not set! [Server {channel.guild.id}]')
-
-                # Construct embed and send
-                embed = discord.Embed(title=f'{bot.config["otd_prefix"]}oTD {self.id} Stats')
-                embed.add_field(name='Difficulty', value=self.difficulty)
-                embed.add_field(name='Weighted Solves', value='0')
-                embed.add_field(name='Base Points', value='0')
-                embed.add_field(name='Solves (official)', value='0')
-                embed.add_field(name='Solves (unofficial)', value='0')
-                stats_message: discord.Message = await channel.send(embed=embed)
-                self.add_stats_message(stats_message.id, channel.guild.id, stats_message.channel.id)
-            except Exception as e:
-                self.logger.warning(e)
-
-    def add_stats_message(self, message_id: int, server_id: int, channel_id: int):
-        cursor = self.db.cursor()
-        cursor.execute('INSERT INTO stats_messages (potd_id, message_id, server_id, channel_id) VALUES (?, ?, ?, ?)',
-                       (self.id, message_id, server_id, channel_id))
-        self.db.commit()
-
-    def build_embed(self, db: sqlite3.Connection, full_stats: bool, prefix: str = 'P'):
+    @classmethod
+    async def convert(cls, ctx: commands.Context, argument: str):
+        """Method tries to infer a user's input and parse it as a problem."""
+        db: sqlite3.Connection = ctx.bot.db
         cursor = db.cursor()
-        cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (self.id, True))
-        official_solves = cursor.fetchall()[0][0]
-        cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (self.id, False))
-        unofficial_solves = cursor.fetchall()[0][0]
 
-        embed = discord.Embed(title=f'{prefix.upper()}oTD {self.id} Stats')
+        # Check if it's an ID
+        if argument.isnumeric():
+            cursor.execute('SELECT EXISTS (SELECT 1 from problems where id = ?)', (int(argument),))
+            if not cursor.fetchall()[0][0]:
+                raise discord.ext.commands.UserInputError(f'No potd with such an ID (`{argument}`)')
+            else:
+                return cls(int(argument), db)
 
-        if full_stats:
-            embed.add_field(name='Date', value=self.date)
-            embed.add_field(name='Season', value=self.season)
+        # Check if it's an date
+        as_datetime = dateparser.parse(argument)
+        if as_datetime is not None:
+            as_date = as_datetime.date()
+            cursor.execute('SELECT id from problems where date = ?', (as_date,))
+            result = cursor.fetchall()
+            if len(result) > 0:
+                return cls(result[0][0], db)
+            else:
+                raise discord.ext.commands.UserInputError(f'No potd with that date! (`{str(as_date)}`)')
 
-        embed.add_field(name='Difficulty', value=self.difficulty)
-        embed.add_field(name='Weighted Solves', value=f'{self.weighted_solves:.2f}')
-        embed.add_field(name='Base Points', value=f'{self.base_points:.2f}')
-        embed.add_field(name='Solves (official)', value=official_solves)
-        embed.add_field(name='Solves (unofficial)', value=unofficial_solves)
-        return embed
+        raise commands.UserInputError(f'Failed to parse {argument} as a valid problem. ')
+
+    async def ensure_public(self, ctx: commands.Context):
+        if not self.public:
+            await ctx.send('This problem is not public!')
+            return False
+        return True
+
+    def info(self):
+        """Get information about a problem. """
+        return [
+            ('id', self.id),
+            ('date', self.date),
+            ('season', self.season),
+            ('statement', self.statement),
+            ('difficulty', self.difficulty),
+            ('weighted_solves', self.weighted_solves),
+            ('base_points', self.base_points),
+            ('answer', self.answer),
+            ('public', self.public),
+            ('source', self.source)
+        ]
+
+
+async def post(self, bot: openpotd.OpenPOTD, channel: int, potd_role_id: int):
+    channel = bot.get_channel(channel)
+    if channel is None:
+        raise Exception('No such channel!')
+    else:
+        try:
+            identification_name = f'**{self.season_name} - #{self.season_order + 1}**'
+            if len(self.images) == 0:
+                await channel.send(
+                    f'{identification_name} of {str(date.today())} has no picture attached. ')
+            else:
+                await channel.send(f'{identification_name} [{str(date.today())}]',
+                                   file=discord.File(io.BytesIO(self.images[0]),
+                                                     filename=f'POTD-{self.id}-0.png'))
+                for i in range(1, len(self.images)):
+                    await channel.send(
+                        file=discord.File(io.BytesIO(self.images[i]), filename=f'POTD-{self.id}-{i}.png'))
+
+            if potd_role_id is not None:
+                await channel.send(f'DM your answers to me! <@&{potd_role_id}>')
+            else:
+                await channel.send(f'DM your answers to me!')
+                logging.warning(f'Config variable ping_role_id is not set! [Server {channel.guild.id}]')
+
+            # Construct embed and send
+            embed = discord.Embed(title=f'{bot.config["otd_prefix"]}oTD {self.id} Stats')
+            embed.add_field(name='Difficulty', value=self.difficulty)
+            embed.add_field(name='Weighted Solves', value='0')
+            embed.add_field(name='Base Points', value='0')
+            embed.add_field(name='Solves (official)', value='0')
+            embed.add_field(name='Solves (unofficial)', value='0')
+            stats_message: discord.Message = await channel.send(embed=embed)
+            self.add_stats_message(stats_message.id, channel.guild.id, stats_message.channel.id)
+        except Exception as e:
+            self.logger.warning(e)
+
+
+def add_stats_message(self, message_id: int, server_id: int, channel_id: int):
+    cursor = self.db.cursor()
+    cursor.execute('INSERT INTO stats_messages (potd_id, message_id, server_id, channel_id) VALUES (?, ?, ?, ?)',
+                   (self.id, message_id, server_id, channel_id))
+    self.db.commit()
+
+
+def build_embed(self, db: sqlite3.Connection, full_stats: bool, prefix: str = 'P'):
+    cursor = db.cursor()
+    cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (self.id, True))
+    official_solves = cursor.fetchall()[0][0]
+    cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (self.id, False))
+    unofficial_solves = cursor.fetchall()[0][0]
+
+    embed = discord.Embed(title=f'{prefix.upper()}oTD {self.id} Stats')
+
+    if full_stats:
+        embed.add_field(name='Date', value=self.date)
+        embed.add_field(name='Season', value=self.season)
+
+    embed.add_field(name='Difficulty', value=self.difficulty)
+    embed.add_field(name='Weighted Solves', value=f'{self.weighted_solves:.2f}')
+    embed.add_field(name='Base Points', value=f'{self.base_points:.2f}')
+    embed.add_field(name='Solves (official)', value=official_solves)
+    embed.add_field(name='Solves (unofficial)', value=unofficial_solves)
+    return embed
