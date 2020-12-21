@@ -104,67 +104,64 @@ class POTD:
             ('source', self.source)
         ]
 
-
-async def post(self, bot: openpotd.OpenPOTD, channel: int, potd_role_id: int):
-    channel = bot.get_channel(channel)
-    if channel is None:
-        raise Exception('No such channel!')
-    else:
-        try:
-            identification_name = f'**{self.season_name} - #{self.season_order + 1}**'
-            if len(self.images) == 0:
-                await channel.send(
-                    f'{identification_name} of {str(date.today())} has no picture attached. ')
-            else:
-                await channel.send(f'{identification_name} [{str(date.today())}]',
-                                   file=discord.File(io.BytesIO(self.images[0]),
-                                                     filename=f'POTD-{self.id}-0.png'))
-                for i in range(1, len(self.images)):
+    async def post(self, bot: openpotd.OpenPOTD, channel: int, potd_role_id: int):
+        channel = bot.get_channel(channel)
+        if channel is None:
+            raise Exception('No such channel!')
+        else:
+            try:
+                identification_name = f'**{self.season_name} - #{self.season_order + 1}**'
+                if len(self.images) == 0:
                     await channel.send(
-                        file=discord.File(io.BytesIO(self.images[i]), filename=f'POTD-{self.id}-{i}.png'))
+                        f'{identification_name} of {str(date.today())} has no picture attached. ')
+                else:
+                    await channel.send(f'{identification_name} [{str(date.today())}]',
+                                       file=discord.File(io.BytesIO(self.images[0]),
+                                                         filename=f'POTD-{self.id}-0.png'))
+                    for i in range(1, len(self.images)):
+                        await channel.send(
+                            file=discord.File(io.BytesIO(self.images[i]), filename=f'POTD-{self.id}-{i}.png'))
 
-            if potd_role_id is not None:
-                await channel.send(f'DM your answers to me! <@&{potd_role_id}>')
-            else:
-                await channel.send(f'DM your answers to me!')
-                logging.warning(f'Config variable ping_role_id is not set! [Server {channel.guild.id}]')
+                if potd_role_id is not None:
+                    await channel.send(f'DM your answers to me! <@&{potd_role_id}>')
+                else:
+                    await channel.send(f'DM your answers to me!')
+                    logging.warning(f'Config variable ping_role_id is not set! [Server {channel.guild.id}]')
 
-            # Construct embed and send
-            embed = discord.Embed(title=f'{bot.config["otd_prefix"]}oTD {self.id} Stats')
-            embed.add_field(name='Difficulty', value=self.difficulty)
-            embed.add_field(name='Weighted Solves', value='0')
-            embed.add_field(name='Base Points', value='0')
-            embed.add_field(name='Solves (official)', value='0')
-            embed.add_field(name='Solves (unofficial)', value='0')
-            stats_message: discord.Message = await channel.send(embed=embed)
-            self.add_stats_message(stats_message.id, channel.guild.id, stats_message.channel.id)
-        except Exception as e:
-            self.logger.warning(e)
+                # Construct embed and send
+                embed = discord.Embed(title=f'{bot.config["otd_prefix"]}oTD {self.id} Stats')
+                embed.add_field(name='Difficulty', value=self.difficulty)
+                embed.add_field(name='Weighted Solves', value='0')
+                embed.add_field(name='Base Points', value='0')
+                embed.add_field(name='Solves (official)', value='0')
+                embed.add_field(name='Solves (unofficial)', value='0')
+                stats_message: discord.Message = await channel.send(embed=embed)
+                self.add_stats_message(stats_message.id, channel.guild.id, stats_message.channel.id)
+            except Exception as e:
+                self.logger.warning(e)
 
+    def add_stats_message(self, message_id: int, server_id: int, channel_id: int):
+        cursor = self.db.cursor()
+        cursor.execute('INSERT INTO stats_messages (potd_id, message_id, server_id, channel_id) VALUES (?, ?, ?, ?)',
+                       (self.id, message_id, server_id, channel_id))
+        self.db.commit()
 
-def add_stats_message(self, message_id: int, server_id: int, channel_id: int):
-    cursor = self.db.cursor()
-    cursor.execute('INSERT INTO stats_messages (potd_id, message_id, server_id, channel_id) VALUES (?, ?, ?, ?)',
-                   (self.id, message_id, server_id, channel_id))
-    self.db.commit()
+    def build_embed(self, db: sqlite3.Connection, full_stats: bool, prefix: str = 'P'):
+        cursor = db.cursor()
+        cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (self.id, True))
+        official_solves = cursor.fetchall()[0][0]
+        cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (self.id, False))
+        unofficial_solves = cursor.fetchall()[0][0]
 
+        embed = discord.Embed(title=f'{prefix.upper()}oTD {self.id} Stats')
 
-def build_embed(self, db: sqlite3.Connection, full_stats: bool, prefix: str = 'P'):
-    cursor = db.cursor()
-    cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (self.id, True))
-    official_solves = cursor.fetchall()[0][0]
-    cursor.execute('SELECT count(1) from solves where problem_id = ? and official = ?', (self.id, False))
-    unofficial_solves = cursor.fetchall()[0][0]
+        if full_stats:
+            embed.add_field(name='Date', value=self.date)
+            embed.add_field(name='Season', value=self.season)
 
-    embed = discord.Embed(title=f'{prefix.upper()}oTD {self.id} Stats')
-
-    if full_stats:
-        embed.add_field(name='Date', value=self.date)
-        embed.add_field(name='Season', value=self.season)
-
-    embed.add_field(name='Difficulty', value=self.difficulty)
-    embed.add_field(name='Weighted Solves', value=f'{self.weighted_solves:.2f}')
-    embed.add_field(name='Base Points', value=f'{self.base_points:.2f}')
-    embed.add_field(name='Solves (official)', value=official_solves)
-    embed.add_field(name='Solves (unofficial)', value=unofficial_solves)
-    return embed
+        embed.add_field(name='Difficulty', value=self.difficulty)
+        embed.add_field(name='Weighted Solves', value=f'{self.weighted_solves:.2f}')
+        embed.add_field(name='Base Points', value=f'{self.base_points:.2f}')
+        embed.add_field(name='Solves (official)', value=official_solves)
+        embed.add_field(name='Solves (unofficial)', value=unofficial_solves)
+        return embed
