@@ -1,0 +1,20 @@
+1.0 Release Notes
+
+Multiserver: 
+- Allow different servers to add OpenPOTD at the same time. 
+- Allow custom prefixes to be set. 
+- Allow servers to set their own gold/silver/bronze roles. 
+
+Other: 
+- Allow people to toggle anonymity on the OpenPOTD website.
+- Custom menus implementation works in DMs as well. 
+- Added exponential cooldown system for not solving a problem. 
+- Add a license (AGPL 3.0).
+- Use dateparser module to allow different date formats to be
+  parsed.
+
+
+1.1 Release Notes
+
+Management:
+- Allow images to be cleared through the bot

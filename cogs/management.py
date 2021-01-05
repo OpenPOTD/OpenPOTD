@@ -361,6 +361,15 @@ class Management(commands.Cog):
 
         await ctx.send('Done!')
 
+    @commands.command()
+    @commands.check(authorised)
+    async def clear_imgs(self, ctx, *, problem: shared.POTD):
+        cursor = self.bot.db.cursor()
+        cursor.execute('DELETE FROM images WHERE potd_id = ?', (problem.id,))
+        self.bot.db.commit()
+
+        await ctx.send('Cleared images!')
+
 
 def setup(bot: openpotd.OpenPOTD):
     bot.add_cog(Management(bot))
