@@ -23,3 +23,4 @@ cogs:
   - cogs.interface
   - cogs.serverconfig
   - cogs.menus
+  - cogs.settings

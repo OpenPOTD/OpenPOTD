@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS "seasons" (
 	"bronze_cutoff" INTEGER,
 	"silver_cutoff" INTEGER,
 	"gold_cutoff"   INTEGER,
+	"public"        BOOLEAN,
 	FOREIGN KEY("latest_potd") REFERENCES "problems"("id")
 );
 CREATE TABLE IF NOT EXISTS "solves" (
@@ -55,6 +56,7 @@ CREATE TABLE IF NOT EXISTS "users" (
 	"discord_id"	INTEGER NOT NULL UNIQUE,
 	"nickname"	TEXT,
 	"anonymous"	BOOLEAN,
+	"receiving_medal_roles"   BOOLEAN DEFAULT TRUE,
 	PRIMARY KEY("discord_id")
 );
 CREATE TABLE IF NOT EXISTS "problems" (

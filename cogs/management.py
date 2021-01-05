@@ -308,16 +308,19 @@ class Management(commands.Cog):
         cursor.execute('SELECT server_id, bronze_role_id, silver_role_id, gold_role_id from config')
         servers = cursor.fetchall()
 
-        cursor.execute('SELECT user_id from rankings where season_id = ? and score > ? and score < ?',
-                       (season, cutoffs[0], cutoffs[1]))
+        cursor.execute('SELECT user_id from rankings inner join users on rankings.user_id = users.discord_id '
+                       'where season_id = ? and score > ? and score < ? and users.receiving_medal_roles = ?',
+                       (season, cutoffs[0], cutoffs[1], True))
         bronzes = [x[0] for x in cursor.fetchall()]
 
-        cursor.execute('SELECT user_id from rankings where season_id = ? and score > ? and score < ?',
-                       (season, cutoffs[1], cutoffs[2]))
+        cursor.execute('SELECT user_id from rankings inner join users on rankings.user_id = users.discord_id '
+                       'where season_id = ? and score > ? and score < ? and users.receiving_medal_roles = ?',
+                       (season, cutoffs[1], cutoffs[2], True))
         silvers = [x[0] for x in cursor.fetchall()]
 
-        cursor.execute('SELECT user_id from rankings where season_id = ? and score > ?',
-                       (season, cutoffs[2]))
+        cursor.execute('SELECT user_id from rankings inner join users on rankings.user_id = users.discord_id '
+                       'where season_id = ? and score > ? and users.receiving_medal_roles = ?',
+                       (season, cutoffs[2], True))
         golds = [x[0] for x in cursor.fetchall()]
         medallers = [bronzes, silvers, golds]
 
