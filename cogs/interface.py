@@ -3,6 +3,7 @@ import logging
 import math
 from datetime import datetime
 import datetime as dt
+import random
 
 import discord
 from discord.ext import commands
@@ -212,7 +213,10 @@ class Interface(commands.Cog):
                 self.refresh(season_id, potd_id)
 
                 # Alert user that they got the question correct
-                await message.channel.send(f'Thank you! You solved the problem after {num_attempts} attempts. ')
+                if random.random() < 0.05:
+                    await message.channel.send(f'Question hunted! Attempts: `{num_attempts}`')
+                else:
+                    await message.channel.send(f'Thank you! You solved the problem after {num_attempts} attempts. ')
 
                 # Give them the "solved" role
                 cursor.execute('SELECT server_id, solved_role_id from config where solved_role_id is not null')
@@ -429,7 +433,6 @@ class Interface(commands.Cog):
         await self.update_embed(potd_id)
 
         self.bot.db.commit()
-
 
     @commands.command(brief='Some information about the bot. ')
     async def info(self, ctx):
