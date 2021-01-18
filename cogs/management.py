@@ -380,7 +380,7 @@ class Management(commands.Cog):
     @commands.check(authorised)
     async def force_update(self, ctx, *, season: int):
         try:
-            self.bot.get_cog('Interface').update_rankings(season)
+            self.bot.get_cog('Interface').refresh(season)
         except Exception as e:
             await ctx.send(e)
 
