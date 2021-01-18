@@ -277,7 +277,10 @@ class Management(commands.Cog):
         for channel_id in potd_channels:
             channel: discord.TextChannel = self.bot.get_channel(channel_id)
             if channel is not None:
-                await channel.send(message)
+                try:
+                    await channel.send(message)
+                except Exception as e:
+                    self.logger.warning(f"[ANNOUNCE] Can't send messages in {channel_id}")
 
     @commands.command()
     @commands.check(authorised)
@@ -372,6 +375,16 @@ class Management(commands.Cog):
         self.bot.db.commit()
 
         await ctx.send('Cleared images!')
+
+    @commands.command()
+    @commands.check(authorised)
+    async def force_update(self, ctx, *, season: int):
+        try:
+            self.bot.get_cog('Interface').update_rankings(season)
+        except Exception as e:
+            await ctx.send(e)
+
+        await ctx.send('Done!')
 
 
 def setup(bot: openpotd.OpenPOTD):
