@@ -268,8 +268,8 @@ class Management(commands.Cog):
         await ctx.send('Done!')
 
     @commands.command()
-    @commands.is_owner()
-    async def announce(self, ctx, *, message):
+    @commands.check(authorised)
+    async def announce(self, ctx, *, message: commands.clean_content):
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT potd_channel from config where potd_channel is not null')
         potd_channels = [x[0] for x in cursor.fetchall()]
