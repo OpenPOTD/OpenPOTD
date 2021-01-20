@@ -214,7 +214,7 @@ class Interface(commands.Cog):
 
                 # Alert user that they got the question correct
                 if random.random() < 0.05:
-                    await message.channel.send(f'Question hunted! Attempts: `{num_attempts}`')
+                    await message.channel.send(f'Correct answer, good shooting Question Hunter! Attempts: `{num_attempts}`')
                 else:
                     await message.channel.send(f'Thank you! You solved the problem after {num_attempts} attempts. ')
 
