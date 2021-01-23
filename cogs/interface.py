@@ -140,6 +140,12 @@ class Interface(commands.Cog):
         else:
             answer = int(s)
 
+        # Check that it isn't too big or too small
+        if answer.bit_length() > 63:
+            await message.channel.send('Your answer is not a 64 bit signed integer (between -2^63 and 2^63 - 1). '
+                                       'Please try again. ')
+            return
+        
         cursor = self.bot.db.cursor()
 
         # Check cooldowns
@@ -214,7 +220,8 @@ class Interface(commands.Cog):
 
                 # Alert user that they got the question correct
                 if random.random() < 0.05:
-                    await message.channel.send(f'Correct answer, good shooting Question Hunter! Attempts: `{num_attempts}`')
+                    await message.channel.send(
+                        f'Correct answer, good shooting Question Hunter! Attempts: `{num_attempts}`')
                 else:
                     await message.channel.send(f'Thank you! You solved the problem after {num_attempts} attempts. ')
 
