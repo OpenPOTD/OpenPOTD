@@ -71,6 +71,8 @@ CREATE TABLE IF NOT EXISTS "problems" (
 	"public"	BOOLEAN,
 	"source"	TEXT,
 	"stats_message_id"	INTEGER,
+	"difficulty_rating" REAL,
+	"coolness_rating"   REAL,
 	FOREIGN KEY("season") REFERENCES "seasons"("id")
 );
 CREATE TABLE IF NOT EXISTS "config" (
@@ -94,3 +96,13 @@ CREATE TABLE IF NOT EXISTS "stats_messages" (
 	FOREIGN KEY("potd_id") REFERENCES "problems"("id"),
 	PRIMARY KEY("id")
 );
+CREATE TABLE IF NOT EXISTS "rating_choices" (
+	"id"	INTEGER NOT NULL,
+	"problem_1_id"	INTEGER NOT NULL,
+	"problem_2_id"	INTEGER NOT NULL,
+	"choice"	INTEGER,
+	"type"	TEXT,
+	PRIMARY KEY("id"),
+	FOREIGN KEY("problem_2_id") REFERENCES "problems"("id"),
+	FOREIGN KEY("problem_1_id") REFERENCES "problems"("id")
+)
