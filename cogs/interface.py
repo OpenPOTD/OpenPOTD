@@ -145,7 +145,7 @@ class Interface(commands.Cog):
             await message.channel.send('Your answer is not a 64 bit signed integer (between -2^63 and 2^63 - 1). '
                                        'Please try again. ')
             return
-        
+
         cursor = self.bot.db.cursor()
 
         # Check cooldowns
