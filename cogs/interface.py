@@ -141,7 +141,7 @@ class Interface(commands.Cog):
             answer = int(s)
 
         # Check that it isn't too big or too small
-        if answer.bit_length() > 63:
+        if not -9223372036854775808 <= answer <= 9223372036854775807:
             await message.channel.send('Your answer is not a 64 bit signed integer (between -2^63 and 2^63 - 1). '
                                        'Please try again. ')
             return
