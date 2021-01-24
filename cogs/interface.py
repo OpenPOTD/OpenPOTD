@@ -114,10 +114,12 @@ class Interface(commands.Cog):
         for server_data in servers:
             potd_channel: discord.TextChannel = self.bot.get_channel(server_data[1])
             if potd_channel is not None:
-                stats_message = await potd_channel.fetch_message(server_data[3])
-                if stats_message is not None:
+                try:
+                    stats_message = await potd_channel.fetch_message(server_data[3])
                     embed = problem.build_embed(self.bot.db, False, server_data[2])
                     await stats_message.edit(embed=embed)
+                except discord.errors.NotFound as e:
+                    self.logger.warning(f'[UPDATE_EMBED] Server {server_data[0]} no message id {server_data[3]}')
 
     def refresh(self, season: int, potd_id: int):
         # Update the rankings in the db
@@ -145,7 +147,7 @@ class Interface(commands.Cog):
             await message.channel.send('Your answer is not a 64 bit signed integer (between -2^63 and 2^63 - 1). '
                                        'Please try again. ')
             return
-        
+
         cursor = self.bot.db.cursor()
 
         # Check cooldowns
