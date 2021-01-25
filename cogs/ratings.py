@@ -151,7 +151,7 @@ class Ratings(commands.Cog):
         self.waiting_for[ctx.author.id] = ChoiceInformation(ctx.author, problem_1, problem_2, datetime.now(), 'DIFF')
 
     @commands.command(brief="Grab two problems you've solved to compare the coolness of. ")
-    async def rate_coolness(self, ctx):
+    async def rate_quality(self, ctx):
         if ctx.author.id in self.waiting_for:
             await ctx.send('You are already trying to rate problems! If you want to cancel, use `%rate d`.')
             return
@@ -178,7 +178,7 @@ class Ratings(commands.Cog):
         await ctx.send(f'Use `%rate OPTION` to submit your rating. Possible values for `OPTION` are: \n'
                        f'`1` if you thought the first problem was **cooler**, \n'
                        f'`2` if you thought the second problem was **cooler**, \n'
-                       f'`n` if you think they are the same difficulty, or \n'
+                       f'`n` if you think they are the same quality, or \n'
                        f'`d` if you have no preference (can\'t decide). ')
 
         self.waiting_for[ctx.author.id] = ChoiceInformation(ctx.author, problem_1, problem_2, datetime.now(), 'COOL')
