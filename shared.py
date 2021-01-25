@@ -46,6 +46,8 @@ class POTD:
             self.public = result[0][8]
             self.source = result[0][9]
             self.stats_message_id = result[0][10]
+            self.difficulty_rating = result[0][11]
+            self.coolness_rating = result[0][12]
             cursor.execute('SELECT image from images WHERE potd_id = ?', (id,))
             self.images = [x[0] for x in cursor.fetchall()]
             cursor.execute('SELECT name from seasons WHERE id = ?', (self.season,))

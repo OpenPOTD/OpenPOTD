@@ -71,8 +71,8 @@ CREATE TABLE IF NOT EXISTS "problems" (
 	"public"	BOOLEAN,
 	"source"	TEXT,
 	"stats_message_id"	INTEGER,
-	"difficulty_rating" REAL,
-	"coolness_rating"   REAL,
+	"difficulty_rating" REAL DEFAULT 1500,
+	"coolness_rating"   REAL DEFAULT 1500,
 	FOREIGN KEY("season") REFERENCES "seasons"("id")
 );
 CREATE TABLE IF NOT EXISTS "config" (
