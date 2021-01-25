@@ -175,6 +175,12 @@ class Ratings(commands.Cog):
         for image in problem_2.images[1:]:
             await ctx.send(file=discord.File(io.BytesIO(image), filename='image.png'))
 
+        await ctx.send(f'Use `%rate OPTION` to submit your rating. Possible values for `OPTION` are: \n'
+                       f'`1` if you thought the first problem was **cooler**, \n'
+                       f'`2` if you thought the second problem was **cooler**, \n'
+                       f'`n` if you think they are the same difficulty, or \n'
+                       f'`d` if you have no preference (can\'t decide). ')
+
         self.waiting_for[ctx.author.id] = ChoiceInformation(ctx.author, problem_1, problem_2, datetime.now(), 'COOL')
 
 
