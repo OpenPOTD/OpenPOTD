@@ -24,3 +24,4 @@ cogs:
   - cogs.serverconfig
   - cogs.menus
   - cogs.settings
+  - cogs.ratings
