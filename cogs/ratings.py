@@ -40,13 +40,22 @@ class Ratings(commands.Cog):
             return
 
         problem_1, problem_2 = select_two_problems(self.bot.db, ctx.author.id)
-        await ctx.send('Which of the following two problems do you think is **harder**? \nProblem 1: ')
+        if len(problem_1.images) > 0:
+            await ctx.send('Which of the following two problems do you think is **harder**? \nProblem 1: ',
+                           file=discord.File(io.BytesIO(problem_1.images[0]), filename='image.png'))
+        else:
+            await ctx.send('Which of the following two problems do you think is **harder**? \nProblem 1: ')
 
-        for image in problem_1.images:
+        for image in problem_1.images[1:]:
             await ctx.send(file=discord.File(io.BytesIO(image), filename='image.png'))
 
-        await ctx.send('Problem 2: ')
-        for image in problem_2.images:
+        if len(problem_2.images) > 0:
+            await ctx.send('Problem 2: ',
+                           file=discord.File(io.BytesIO(problem_2.images[0]), filename='image.png'))
+        else:
+            await ctx.send('Problem 2: ')
+
+        for image in problem_2.images[1:]:
             await ctx.send(file=discord.File(io.BytesIO(image), filename='image.png'))
 
         await ctx.send(f'Use `%rate OPTION` to submit your rating. Possible values for `OPTION` are: \n'
@@ -64,20 +73,23 @@ class Ratings(commands.Cog):
             return
 
         problem_1, problem_2 = select_two_problems(self.bot.db, ctx.author.id)
-        await ctx.send('Which of the following two problems do you think is **cooler**? \nProblem 1: ')
+        if len(problem_1.images) > 0:
+            await ctx.send('Which of the following two problems do you think is **cooler**? \nProblem 1: ',
+                           file=discord.File(io.BytesIO(problem_1.images[0]), filename='image.png'))
+        else:
+            await ctx.send('Which of the following two problems do you think is **cooler**? \nProblem 1: ')
 
-        for image in problem_1.images:
+        for image in problem_1.images[1:]:
             await ctx.send(file=discord.File(io.BytesIO(image), filename='image.png'))
 
-        await ctx.send('Problem 2: ')
-        for image in problem_2.images:
-            await ctx.send(file=discord.File(io.BytesIO(image), filename='image.png'))
+        if len(problem_2.images) > 0:
+            await ctx.send('Problem 2: ',
+                           file=discord.File(io.BytesIO(problem_2.images[0]), filename='image.png'))
+        else:
+            await ctx.send('Problem 2: ')
 
-        await ctx.send(f'Use `%rate OPTION` to submit your rating. Possible values for `OPTION` are: \n'
-                       f'`1` if you thought the first problem was **cooler**, \n'
-                       f'`2` if you thought the second problem was **cooler**, \n'
-                       f'`n` if you think they are the same difficulty, or \n'
-                       f'`d` if you have no preference (can\'t decide). ')
+        for image in problem_2.images[1:]:
+            await ctx.send(file=discord.File(io.BytesIO(image), filename='image.png'))
 
         self.waiting_for[ctx.author.id] = ChoiceInformation(ctx.author, problem_1, problem_2, datetime.now(), 'COOL')
 
