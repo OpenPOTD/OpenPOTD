@@ -60,8 +60,9 @@ class Ratings(commands.Cog):
         elo_k_2 = 10 + 100 * 10 ** (number_2 / -20)
 
         # Log rating
-        cursor.execute('INSERT INTO rating_choices (problem_1_id, problem_2_id, choice, type) VALUES (?, ?, ?, ?)',
-                       (choices.p1.id, choices.p2.id, rating, choices.type))
+        cursor.execute('INSERT INTO rating_choices (problem_1_id, problem_2_id, choice, type, rater) '
+                       'VALUES (?, ?, ?, ?, ?)',
+                       (choices.p1.id, choices.p2.id, rating, choices.type, ctx.author.id))
         self.bot.db.commit()
 
         # If it doesn't care, void
