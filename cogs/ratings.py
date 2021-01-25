@@ -35,7 +35,7 @@ class Ratings(commands.Cog):
         self.waiting_for = {}
         self.logger = logging.getLogger('Ratings')
 
-    @commands.command(brief="Rate two problems you've been given.")
+    @commands.command(brief="Rate two problems you've been given.", aliases=['rt', 'r'])
     async def rate(self, ctx, *, rating):
         if ctx.author.id not in self.waiting_for:
             await ctx.send("You haven't got any problems to rate! "
@@ -123,7 +123,7 @@ class Ratings(commands.Cog):
         self.logger.info(f'[RATE] User {choices.user.id} rated {choices.p1.id} and {choices.p2.id} PREFERENCE '
                          f'{rating} TYPE {choices.type}')
 
-    @commands.command(brief="Grab two problems you've solved to compare the difficulty of. ")
+    @commands.command(brief="Grab two problems you've solved to compare the difficulty of. ", aliases=['rd'])
     async def rate_difficulty(self, ctx):
         if ctx.author.id in self.waiting_for:
             await ctx.send('You are already trying to rate problems! If you want to cancel, use `%rate d`.')
@@ -156,7 +156,7 @@ class Ratings(commands.Cog):
 
         self.waiting_for[ctx.author.id] = ChoiceInformation(ctx.author, problem_1, problem_2, datetime.now(), 'DIFF')
 
-    @commands.command(brief="Grab two problems you've solved to compare the coolness of. ")
+    @commands.command(brief="Grab two problems you've solved to compare the coolness of. ", aliases=['rq'])
     async def rate_quality(self, ctx):
         if ctx.author.id in self.waiting_for:
             await ctx.send('You are already trying to rate problems! If you want to cancel, use `%rate d`.')
