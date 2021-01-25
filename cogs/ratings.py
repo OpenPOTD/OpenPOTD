@@ -37,6 +37,7 @@ class Ratings(commands.Cog):
     async def rate_difficulty(self, ctx):
         if ctx.author.id in self.waiting_for:
             await ctx.send('You are already trying to rate problems! If you want to cancel, use `%rate d`.')
+            return
 
         problem_1, problem_2 = select_two_problems(self.bot.db, ctx.author.id)
         await ctx.send('Which of the following two problems do you think is **harder**? \nProblem 1: ')
@@ -60,6 +61,7 @@ class Ratings(commands.Cog):
     async def rate_coolness(self, ctx):
         if ctx.author.id in self.waiting_for:
             await ctx.send('You are already trying to rate problems! If you want to cancel, use `%rate d`.')
+            return
 
         problem_1, problem_2 = select_two_problems(self.bot.db, ctx.author.id)
         await ctx.send('Which of the following two problems do you think is **cooler**? \nProblem 1: ')
