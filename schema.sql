@@ -102,9 +102,8 @@ CREATE TABLE IF NOT EXISTS "rating_choices" (
 	"problem_2_id"	INTEGER NOT NULL,
 	"choice"	INTEGER,
 	"type"	TEXT,
-	"rater" INTEGER NOT NULL,
+	"rater" INTEGER,
 	PRIMARY KEY("id"),
 	FOREIGN KEY("problem_2_id") REFERENCES "problems"("id"),
-	FOREIGN KEY("problem_1_id") REFERENCES "problems"("id"),
-	FOREIGN KEY("rater") REFERENCES "users"("discord_id")
+	FOREIGN KEY("problem_1_id") REFERENCES "problems"("id")
 )
