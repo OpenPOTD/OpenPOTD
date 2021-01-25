@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import sqlite3
+import logging
 
 import openpotd
 import shared
@@ -32,6 +33,7 @@ class Ratings(commands.Cog):
     def __init__(self, bot: openpotd.OpenPOTD):
         self.bot = bot
         self.waiting_for = {}
+        self.logger = logging.getLogger('Ratings')
 
     @commands.command(brief="Rate two problems you've been given.")
     async def rate(self, ctx, *, rating):
@@ -116,6 +118,9 @@ class Ratings(commands.Cog):
                        f"respectively and they have changed to {new_1:.2f} and {new_2:.2f} respectively.")
 
         del self.waiting_for[ctx.author.id]
+
+        self.logger.info(f'[RATE] User {choices.user.id} rated {choices.p1.id} and {choices.p2.id} PREFERENCE '
+                         f'{rating} TYPE {choices.type}')
 
     @commands.command(brief="Grab two problems you've solved to compare the difficulty of. ")
     async def rate_difficulty(self, ctx):
