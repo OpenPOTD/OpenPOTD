@@ -129,7 +129,12 @@ class Ratings(commands.Cog):
             await ctx.send('You are already trying to rate problems! If you want to cancel, use `%rate d`.')
             return
 
-        problem_1, problem_2 = select_two_problems(self.bot.db, ctx.author.id)
+        try:
+            problem_1, problem_2 = select_two_problems(self.bot.db, ctx.author.id)
+        except IndexError as e:
+            await ctx.send("You need to have solved at least two problems!")
+            return
+        
         if len(problem_1.images) > 0:
             await ctx.send('Which of the following two problems do you think is **harder**? \nProblem 1: ',
                            file=discord.File(io.BytesIO(problem_1.images[0]), filename='image.png'))
@@ -162,7 +167,12 @@ class Ratings(commands.Cog):
             await ctx.send('You are already trying to rate problems! If you want to cancel, use `%rate d`.')
             return
 
-        problem_1, problem_2 = select_two_problems(self.bot.db, ctx.author.id)
+        try:
+            problem_1, problem_2 = select_two_problems(self.bot.db, ctx.author.id)
+        except IndexError as e:
+            await ctx.send("You need to have solved at least two problems!")
+            return
+
         if len(problem_1.images) > 0:
             await ctx.send('Which of the following two problems do you think is **cooler**? \nProblem 1: ',
                            file=discord.File(io.BytesIO(problem_1.images[0]), filename='image.png'))
