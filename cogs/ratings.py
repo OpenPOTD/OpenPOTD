@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 
-def select_two_problems(conn: sqlite3.Connection, userid):
+def select_two_problems(conn: sqlite3.Connection, userid, field):
     cursor = conn.cursor()
     cursor.execute('SELECT solves.problem_id FROM solves WHERE solves.id IN (SELECT id FROM solves WHERE'
                    ' solves.user = ? ORDER BY RANDOM() LIMIT 1)', (userid,))
@@ -21,7 +21,7 @@ def select_two_problems(conn: sqlite3.Connection, userid):
 
     cursor.execute('select problems.id from solves inner '
                    'join problems on solves.problem_id = problems.id where solves.id in (select id from '
-                   'solves where solves.user = ? and solves.problem_id != ?) order by abs(problems.difficulty_rating '
+                   f'solves where solves.user = ? and solves.problem_id != ?) order by abs(problems.{field} '
                    '- ?) LIMIT 10;', (userid, first_problem_id, first_problem.difficulty_rating))
     result = cursor.fetchall()
     print(result)
@@ -142,7 +142,7 @@ class Ratings(commands.Cog):
             return
 
         try:
-            problem_1, problem_2 = select_two_problems(self.bot.db, ctx.author.id)
+            problem_1, problem_2 = select_two_problems(self.bot.db, ctx.author.id, 'difficulty_rating')
         except IndexError as e:
             await ctx.send("You need to have solved at least two problems!")
             return
@@ -180,7 +180,7 @@ class Ratings(commands.Cog):
             return
 
         try:
-            problem_1, problem_2 = select_two_problems(self.bot.db, ctx.author.id)
+            problem_1, problem_2 = select_two_problems(self.bot.db, ctx.author.id, 'coolness_rating')
         except IndexError as e:
             await ctx.send("You need to have solved at least two problems!")
             return
