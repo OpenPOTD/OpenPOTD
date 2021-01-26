@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import sqlite3
 import logging
+import random
 
 import openpotd
 import shared
@@ -135,7 +136,7 @@ class Ratings(commands.Cog):
         except IndexError as e:
             await ctx.send("You need to have solved at least two problems!")
             return
-        
+
         if len(problem_1.images) > 0:
             await ctx.send('Which of the following two problems do you think is **harder**? \nProblem 1: ',
                            file=discord.File(io.BytesIO(problem_1.images[0]), filename='image.png'))
@@ -199,6 +200,11 @@ class Ratings(commands.Cog):
                        f'`d` if you have no preference (can\'t decide). ')
 
         self.waiting_for[ctx.author.id] = ChoiceInformation(ctx.author, problem_1, problem_2, datetime.now(), 'COOL')
+
+    @commands.command(brief=f"Randomly do either rate_quality or rate_difficulty", aliases=['rr'])
+    async def rate_random(self, ctx):
+        choice = random.choice((self.rate_quality, self.rate_difficulty))
+        await choice(ctx)
 
 
 def setup(bot: openpotd.OpenPOTD):
