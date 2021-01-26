@@ -15,10 +15,18 @@ from datetime import datetime
 def select_two_problems(conn: sqlite3.Connection, userid):
     cursor = conn.cursor()
     cursor.execute('SELECT solves.problem_id FROM solves WHERE solves.id IN (SELECT id FROM solves WHERE'
-                   ' solves.user = ? ORDER BY RANDOM() LIMIT 2)', (userid,))
-    result = cursor.fetchall()
+                   ' solves.user = ? ORDER BY RANDOM() LIMIT 1)', (userid,))
+    first_problem_id = cursor.fetchall()[0][0]
+    first_problem = shared.POTD(first_problem_id, conn)
 
-    return shared.POTD(result[0][0], conn), shared.POTD(result[1][0], conn)
+    cursor.execute('select problems.id, problems.statement, problems.difficulty_rating from solves inner '
+                   'join problems on solves.problem_id = problems.id where solves.id in (select id from '
+                   'solves where solves.user = ? and solves.problem_id != ?) order by abs(problems.difficulty_rating '
+                   '- ?) LIMIT 10;', (first_problem_id, userid, first_problem.difficulty_rating))
+    second_problem_id = random.choice(cursor.fetchall())[0]
+    second_problem = shared.POTD(second_problem_id, conn)
+
+    return first_problem, second_problem
 
 
 @dataclass
