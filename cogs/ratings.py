@@ -22,7 +22,7 @@ def select_two_problems(conn: sqlite3.Connection, userid, field):
     cursor.execute('select problems.id from solves inner '
                    'join problems on solves.problem_id = problems.id where solves.id in (select id from '
                    f'solves where solves.user = ? and solves.problem_id != ?) order by abs(problems.{field} '
-                   '- ?) LIMIT 10;', (userid, first_problem_id, first_problem.difficulty_rating))
+                   '- ?) LIMIT 20;', (userid, first_problem_id, first_problem.difficulty_rating))
     result = cursor.fetchall()
     print(result)
     second_problem_id = random.choice(result)[0]
