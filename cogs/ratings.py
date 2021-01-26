@@ -68,6 +68,7 @@ class Ratings(commands.Cog):
         # If it doesn't care, void
         if rating == 'd':
             await ctx.send("Thank you for your rating.")
+            del self.waiting_for[ctx.author.id]
             return
 
         # Calculate elo stuffs
