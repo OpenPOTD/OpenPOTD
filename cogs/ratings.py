@@ -7,7 +7,7 @@ import random
 import openpotd
 import shared
 import io
-import cogs.management
+import cogs.management as mgmt
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -17,7 +17,7 @@ def select_two_problems(conn: sqlite3.Connection, userid, field):
     cursor = conn.cursor()
 
     # Authorised members don't have to solve a problem to be able to rate it.
-    if not cogs.management.authorised(userid):
+    if not mgmt.authorised(userid):
         cursor.execute('SELECT solves.problem_id FROM solves WHERE solves.id IN (SELECT id FROM solves WHERE'
                        ' solves.user = ? ORDER BY RANDOM() LIMIT 1)', (userid,))
     else:
@@ -27,7 +27,7 @@ def select_two_problems(conn: sqlite3.Connection, userid, field):
     first_problem = shared.POTD(first_problem_id, conn)
 
     # Same with the second problem
-    if not cogs.management.authorised(userid):
+    if not mgmt.authorised(userid):
         cursor.execute('select problems.id from solves inner '
                        'join problems on solves.problem_id = problems.id where solves.id in (select id from '
                        f'solves where solves.user = ? and solves.problem_id != ?) order by abs(problems.{field} '
