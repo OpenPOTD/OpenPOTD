@@ -13,11 +13,12 @@ from dataclasses import dataclass
 from datetime import datetime
 
 
-def select_two_problems(conn: sqlite3.Connection, userid, field):
+def select_two_problems(conn: sqlite3.Connection, ctx, field):
     cursor = conn.cursor()
+    userid = ctx.author.id
 
     # Authorised members don't have to solve a problem to be able to rate it.
-    if not mgmt.authorised(userid):
+    if not mgmt.authorised(ctx):
         cursor.execute('SELECT solves.problem_id FROM solves WHERE solves.id IN (SELECT id FROM solves WHERE'
                        ' solves.user = ? ORDER BY RANDOM() LIMIT 1)', (userid,))
     else:
@@ -27,7 +28,7 @@ def select_two_problems(conn: sqlite3.Connection, userid, field):
     first_problem = shared.POTD(first_problem_id, conn)
 
     # Same with the second problem
-    if not mgmt.authorised(userid):
+    if not mgmt.authorised(ctx):
         cursor.execute('select problems.id from solves inner '
                        'join problems on solves.problem_id = problems.id where solves.id in (select id from '
                        f'solves where solves.user = ? and solves.problem_id != ?) order by abs(problems.{field} '
@@ -157,7 +158,7 @@ class Ratings(commands.Cog):
             return
 
         try:
-            problem_1, problem_2 = select_two_problems(self.bot.db, ctx.author.id, 'difficulty_rating')
+            problem_1, problem_2 = select_two_problems(self.bot.db, ctx, 'difficulty_rating')
         except IndexError as e:
             await ctx.send("You need to have solved at least two problems!")
             return
@@ -195,7 +196,7 @@ class Ratings(commands.Cog):
             return
 
         try:
-            problem_1, problem_2 = select_two_problems(self.bot.db, ctx.author.id, 'coolness_rating')
+            problem_1, problem_2 = select_two_problems(self.bot.db, ctx, 'coolness_rating')
         except IndexError as e:
             await ctx.send("You need to have solved at least two problems!")
             return
