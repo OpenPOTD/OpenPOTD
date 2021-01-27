@@ -7,6 +7,7 @@ import random
 import openpotd
 import shared
 import io
+import cogs.management
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -14,17 +15,31 @@ from datetime import datetime
 
 def select_two_problems(conn: sqlite3.Connection, userid, field):
     cursor = conn.cursor()
-    cursor.execute('SELECT solves.problem_id FROM solves WHERE solves.id IN (SELECT id FROM solves WHERE'
-                   ' solves.user = ? ORDER BY RANDOM() LIMIT 1)', (userid,))
+
+    # Authorised members don't have to solve a problem to be able to rate it.
+    if not cogs.management.authorised(userid):
+        cursor.execute('SELECT solves.problem_id FROM solves WHERE solves.id IN (SELECT id FROM solves WHERE'
+                       ' solves.user = ? ORDER BY RANDOM() LIMIT 1)', (userid,))
+    else:
+        cursor.execute('SELECT id from problems WHERE public = ? order by random() limit 1', (True,))
+
     first_problem_id = cursor.fetchall()[0][0]
     first_problem = shared.POTD(first_problem_id, conn)
 
-    cursor.execute('select problems.id from solves inner '
-                   'join problems on solves.problem_id = problems.id where solves.id in (select id from '
-                   f'solves where solves.user = ? and solves.problem_id != ?) order by abs(problems.{field} '
-                   '- ?) LIMIT 20;', (userid, first_problem_id, first_problem.difficulty_rating))
+    # Same with the second problem
+    if not cogs.management.authorised(userid):
+        cursor.execute('select problems.id from solves inner '
+                       'join problems on solves.problem_id = problems.id where solves.id in (select id from '
+                       f'solves where solves.user = ? and solves.problem_id != ?) order by abs(problems.{field} '
+                       '- ?) LIMIT 20;',
+                       (userid, first_problem_id,
+                        first_problem.difficulty_rating if field == 'difficulty_rating'
+                        else first_problem.coolness_rating))
+    else:
+        cursor.execute(f'SELECT id from problems where public = ? order by abs(problems.{field} - 1600) limit 20',
+                       (True,))
+
     result = cursor.fetchall()
-    print(result)
     second_problem_id = random.choice(result)[0]
     second_problem = shared.POTD(second_problem_id, conn)
 
