@@ -37,8 +37,10 @@ def select_two_problems(conn: sqlite3.Connection, ctx, field):
                         first_problem.difficulty_rating if field == 'difficulty_rating'
                         else first_problem.coolness_rating))
     else:
-        cursor.execute(f'SELECT id from problems where public = ? order by abs(problems.{field} - 1600) limit 20',
-                       (True,))
+        cursor.execute(f'SELECT id from problems where public = ? order by abs(problems.{field} - ?) limit 20',
+                       (True,
+                        first_problem.difficulty_rating if field == 'difficulty_rating'
+                        else first_problem.coolness_rating))
 
     result = cursor.fetchall()
     second_problem_id = random.choice(result)[0]
