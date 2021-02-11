@@ -134,6 +134,12 @@ class Interface(commands.Cog):
                 or message.content[0] == self.bot.config['prefix']:  # you can't submit answers in a server
             return
 
+        # Make sure it's time for submission
+        if self.bot.posting_problem:
+            await message.channel.send('The new problem is being posted. Please wait until the bot '
+                                       'status changes to submit your answer. ')
+            return
+
         # Validating int-ness
         s = message.content
         if not (s[1:].isdecimal() if s[0] in ('-', '+') else s.isdecimal()):

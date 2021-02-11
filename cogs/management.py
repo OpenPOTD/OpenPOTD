@@ -33,6 +33,9 @@ class Management(commands.Cog):
         self.bot.loop.create_task(self.advance_potd())
 
     async def advance_potd(self):
+        # Let the bot and users know we are posting the problem
+        await self.bot.started_posting()
+
         self.logger.info(f'Advancing POTD at {datetime.now()}')
         cursor = self.bot.db.cursor()
 
@@ -109,6 +112,9 @@ class Management(commands.Cog):
 
         # Log this
         self.logger.info(f'Posted {self.bot.config["otd_prefix"]}OTD {potd_id}. ')
+
+        # Let the bot and users know we are done posting the problem
+        await self.bot.finished_posting()
 
     @commands.command()
     @commands.check(authorised)

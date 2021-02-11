@@ -47,6 +47,9 @@ class OpenPOTD(commands.Bot):
         global prefixes
         prefixes = {x[0]: x[1] for x in cursor.fetchall()}
 
+        # Set refreshing status
+        self.posting_problem = False
+
     async def on_ready(self):
         self.logger.info('Connected to Discord')
         self.logger.info('Guilds  : {}'.format(len(self.guilds)))
@@ -132,6 +135,14 @@ class OpenPOTD(commands.Bot):
         else:
             info = traceback.format_exception(type(exception), exception, exception.__traceback__, chain=False)
             self.logger.error('Unhandled command exception - {}'.format(''.join(info)))
+
+    async def started_posting(self):
+        await self.set_presence('Posting new problem')
+        self.posting_problem = True
+
+    async def finished_posting(self):
+        await self.set_presence(self.config['presence'])
+        self.posting_problem = False
 
 
 def executor():
