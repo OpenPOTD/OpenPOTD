@@ -354,8 +354,19 @@ class Interface(commands.Cog):
             return
 
         potd_id = problem.id
-
         cursor = self.bot.db.cursor()
+
+        # Calculate the otd prefix
+        if ctx.guild is None:
+            otd_prefix = self.bot.config["otd_prefix"]
+        else:
+            cursor.execute('SELECT otd_prefix from config WHERE server_id = ?', (ctx.guild.id,))
+            result = cursor.fetchall()
+            if len(result) == 0:
+                otd_prefix = self.bot.config["otd_prefix"]
+            else:
+                otd_prefix = result[0][0]
+
         cursor.execute('SELECT date from problems where id = ?', (potd_id,))
         potd_date = cursor.fetchall()[0][0]
 
@@ -363,9 +374,9 @@ class Interface(commands.Cog):
         cursor.execute('''SELECT image FROM images WHERE potd_id = ?''', (potd_id,))
         images = cursor.fetchall()
         if len(images) == 0:
-            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date} has no picture attached. ')
+            await ctx.send(f'{otd_prefix}OTD {potd_id} of {potd_date} has no picture attached. ')
         else:
-            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {potd_id} of {potd_date}',
+            await ctx.send(f'{otd_prefix}OTD {potd_id} of {potd_date}',
                            file=discord.File(io.BytesIO(images[0][0]),
                                              filename=f'POTD-{potd_id}-0.png'))
             for i in range(1, len(images)):
