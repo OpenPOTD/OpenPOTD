@@ -52,45 +52,65 @@ class Interface(commands.Cog):
     def update_rankings(self, season: int, potd_id: int = -1):
         cursor = self.bot.db.cursor()
 
-        # Get all solves this season
-        cursor.execute('select solves.user, solves.problem_id, solves.num_attempts from problems left join solves '
-                       'where problems.season = ? and problems.id = solves.problem_id and official = ?', (season, True))
-        solves = cursor.fetchall()
+        # NOTE: THE OPENPOTD TEAM IS USING A NEW SCORING SYSTEM FOR SEASON 11. IF THIS DOES NOT APPLY TO YOU,
+        # REMOVE THIS.
+        if season == 11:
+            # Get all solves this season
+            cursor.execute('select solves.user, solves.problem_id, solves.num_attempts from problems left join solves '
+                           'where problems.season = ? and problems.id = solves.problem_id and official = ?',
+                           (season, True))
+            solves = cursor.fetchall()
 
-        # Get weighted attempts for each problem
-        weighted_attempts = {}
-        for solve in solves:
-            if solve[1] in weighted_attempts:
-                weighted_attempts[solve[1]] += weighted_score(solve[2])
+            # Get all ranked people
+            cursor.execute('select user_id from rankings where season_id = ?', (season,))
+            ranked_users = cursor.fetchall()
+
+            # Calculate scores of each person
+            total_score = {user[0]: 0 for user in ranked_users}
+            for solve in solves:
+                total_score[solve[0]] += 8 - solve[2]
+
+        else:
+            # Get all solves this season
+            cursor.execute('select solves.user, solves.problem_id, solves.num_attempts from problems left join solves '
+                           'where problems.season = ? and problems.id = solves.problem_id and official = ?',
+                           (season, True))
+            solves = cursor.fetchall()
+
+            # Get weighted attempts for each problem
+            weighted_attempts = {}
+            for solve in solves:
+                if solve[1] in weighted_attempts:
+                    weighted_attempts[solve[1]] += weighted_score(solve[2])
+                else:
+                    weighted_attempts[solve[1]] = weighted_score(solve[2])
+
+            # Calculate how many points each problem should be worth on the 1st attempt
+            problem_points = {i: self.bot.config['base_points'] / weighted_attempts[i] for i in weighted_attempts}
+
+            # Get all ranked people
+            cursor.execute('select user_id from rankings where season_id = ?', (season,))
+            ranked_users = cursor.fetchall()
+
+            # Calculate scores of each person
+            total_score = {user[0]: 0 for user in ranked_users}
+            for solve in solves:
+                total_score[solve[0]] += problem_points[solve[1]] * weighted_score(solve[2])
+
+            if potd_id == -1:
+                # Then we shall update all the potds
+                cursor.executemany('UPDATE problems SET weighted_solves = ?, base_points = ? WHERE problems.id = ?',
+                                   [(weighted_attempts[i], problem_points[i], i) for i in weighted_attempts])
             else:
-                weighted_attempts[solve[1]] = weighted_score(solve[2])
-
-        # Calculate how many points each problem should be worth on the 1st attempt
-        problem_points = {i: self.bot.config['base_points'] / weighted_attempts[i] for i in weighted_attempts}
-
-        # Get all ranked people
-        cursor.execute('select user_id from rankings where season_id = ?', (season,))
-        ranked_users = cursor.fetchall()
-
-        # Calculate scores of each person
-        total_score = {user[0]: 0 for user in ranked_users}
-        for solve in solves:
-            total_score[solve[0]] += problem_points[solve[1]] * weighted_score(solve[2])
-
+                # Only update the specified potd
+                if potd_id in weighted_attempts:
+                    cursor.execute('UPDATE problems SET weighted_solves = ?, base_points = ? WHERE problems.id = ?',
+                                   (weighted_attempts[potd_id], problem_points[potd_id], potd_id))
+                else:
+                    self.logger.error(f'No potd with id {potd_id} present. Cannot refresh stats [update_rankings]')
+                    
         # Log stuff
         self.logger.info('Updating rankings')
-
-        if potd_id == -1:
-            # Then we shall update all the potds
-            cursor.executemany('UPDATE problems SET weighted_solves = ?, base_points = ? WHERE problems.id = ?',
-                               [(weighted_attempts[i], problem_points[i], i) for i in weighted_attempts])
-        else:
-            # Only update the specified potd
-            if potd_id in weighted_attempts:
-                cursor.execute('UPDATE problems SET weighted_solves = ?, base_points = ? WHERE problems.id = ?',
-                               (weighted_attempts[potd_id], problem_points[potd_id], potd_id))
-            else:
-                self.logger.error(f'No potd with id {potd_id} present. Cannot refresh stats [update_rankings]')
 
         # Prepare data to be put into the db
         total_score_list = [(i, total_score[i]) for i in total_score]
