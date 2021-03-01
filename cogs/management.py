@@ -355,7 +355,12 @@ class Management(commands.Cog):
                         continue
                     for user in medal_role.members:
                         user: discord.Member
-                        await user.remove_roles(medal_role)
+                        try:
+                            await user.remove_roles(medal_role)
+                        except Exception as e:
+                            self.logger.warning(f'[{server_id}] Trying to assign roles: '
+                                                f'Guild {server_id} missing permissions. ')
+
             self.logger.info(f'[{server_id}] Removed all medal roles from guild {server_id}')
 
             # Give roles
@@ -368,7 +373,11 @@ class Management(commands.Cog):
                     for user_id in medallers[x]:
                         if guild.get_member(user_id) is not None:
                             member: discord.Member = guild.get_member(user_id)
-                            await member.add_roles(medal_role)
+                            try:
+                                await member.add_roles(medal_role)
+                            except Exception as e:
+                                self.logger.warning(f'[{server_id}] Trying to assign roles: '
+                                                    f'Guild {server_id} missing permissions. [{user_id}]')
                             self.logger.info(f'[{server_id}] Gave {user_id} role {medal_role.name}')
 
         await ctx.send('Done!')
