@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS "users" (
 	"discord_id"	INTEGER NOT NULL UNIQUE,
 	"nickname"	TEXT,
 	"anonymous"	BOOLEAN,
-	"receiving_medal_roles"   BOOLEAN DEFAULT TRUE,
+	"receiving_medal_roles"   BOOLEAN DEFAULT 1,
 	PRIMARY KEY("discord_id")
 );
 CREATE TABLE IF NOT EXISTS "problems" (
