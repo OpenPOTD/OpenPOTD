@@ -17,6 +17,13 @@ def weighted_score(attempts: int):
     return 0.9 ** (attempts - 1)
 
 
+weighted_score_dict = [1, 0.9, 0.65, 0.45, 0.25, 0.1]
+
+
+def weighted_score_new(attempts: int):
+    return weighted_score_dict[min(attempts, len(weighted_score_dict) - 1)]
+
+
 class Interface(commands.Cog):
     def __init__(self, bot: openpotd.OpenPOTD):
         self.bot = bot
@@ -79,11 +86,18 @@ class Interface(commands.Cog):
 
             # Get weighted attempts for each problem
             weighted_attempts = {}
-            for solve in solves:
-                if solve[1] in weighted_attempts:
-                    weighted_attempts[solve[1]] += weighted_score(solve[2])
-                else:
-                    weighted_attempts[solve[1]] = weighted_score(solve[2])
+            if season > 11:
+                for solve in solves:
+                    if solve[1] in weighted_attempts:
+                        weighted_attempts[solve[1]] += weighted_score_new(solve[2])
+                    else:
+                        weighted_attempts[solve[1]] = weighted_score_new(solve[2])
+            else:
+                for solve in solves:
+                    if solve[1] in weighted_attempts:
+                        weighted_attempts[solve[1]] += weighted_score(solve[2])
+                    else:
+                        weighted_attempts[solve[1]] = weighted_score(solve[2])
 
             # Calculate how many points each problem should be worth on the 1st attempt
             problem_points = {i: self.bot.config['base_points'] / weighted_attempts[i] for i in weighted_attempts}
@@ -108,7 +122,7 @@ class Interface(commands.Cog):
                                    (weighted_attempts[potd_id], problem_points[potd_id], potd_id))
                 else:
                     self.logger.error(f'No potd with id {potd_id} present. Cannot refresh stats [update_rankings]')
-                    
+
         # Log stuff
         self.logger.info('Updating rankings')
 
@@ -205,7 +219,7 @@ class Interface(commands.Cog):
                 cursor.execute('SELECT count() from attempts where user_id = ? and potd_id = ?',
                                (message.author.id, potd_id))
                 num_attempts = cursor.fetchall()[0][0]
-                cool_down = math.pow(1.75, num_attempts)
+                cool_down = 10 if num_attempts < 5 else 1800 if num_attempts == 5 else 1000000
                 self.cooldowns[message.author.id] = datetime.utcnow() + dt.timedelta(seconds=cool_down)
 
             # Put a ranking entry in for them
