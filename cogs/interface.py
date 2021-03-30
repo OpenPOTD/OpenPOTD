@@ -21,7 +21,7 @@ weighted_score_dict = [1, 0.9, 0.65, 0.45, 0.25, 0.1]
 
 
 def weighted_score_new(attempts: int):
-    return weighted_score_dict[min(attempts, len(weighted_score_dict) - 1)]
+    return weighted_score_dict[min(attempts, len(weighted_score_dict)) - 1]
 
 
 class Interface(commands.Cog):
