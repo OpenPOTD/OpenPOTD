@@ -100,7 +100,11 @@ class Interface(commands.Cog):
                         weighted_attempts[solve[1]] = weighted_score(solve[2])
 
             # Calculate how many points each problem should be worth on the 1st attempt
-            problem_points = {i: self.bot.config['base_points'] / weighted_attempts[i] for i in weighted_attempts}
+            if season > 11:
+                problem_points = {i: self.bot.config['base_points'] / (weighted_attempts[i] + 3) for i in
+                                  weighted_attempts}
+            else:
+                problem_points = {i: self.bot.config['base_points'] / weighted_attempts[i] for i in weighted_attempts}
 
             # Get all ranked people
             cursor.execute('select user_id from rankings where season_id = ?', (season,))
