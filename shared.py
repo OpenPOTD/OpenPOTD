@@ -25,6 +25,29 @@ def get_current_problem(conn: sqlite3.Connection):
         return POTD(result[0][0], conn)
 
 
+async def assign_solved_role(servers: list, user_id: int, give: bool, context: commands.Context):
+    for server in servers:
+        guild: discord.Guild = context.bot.get_guild(server[0])
+        if guild is None:
+            continue
+
+        member: discord.Member = guild.get_member(user_id)
+        if member is None:
+            continue
+
+        solved_role: discord.Role = guild.get_role(server[1])
+        if solved_role is None:
+            continue
+
+        try:
+            if give:
+                await member.add_roles(solved_role, reason=f'Solved POTD')
+            else:
+                await member.remove_roles(solved_role, reason=f'Did not solve POTD')
+        except Exception as e:
+            logging.warning(f'[ASSIGNING SOLVED ROLE] Guild {server[0]} failed. ')
+
+
 class POTD:
     """Representation of a problem of the day. """
 

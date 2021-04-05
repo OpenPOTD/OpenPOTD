@@ -401,6 +401,104 @@ class Management(commands.Cog):
 
         await ctx.send('Done!')
 
+    @commands.command()
+    @commands.check(authorised)
+    async def change_answer(self, ctx, problem: shared.POTD, new_answer: int):
+        # Get all attempts and current solves
+        cursor = self.bot.db.cursor()
+
+        cursor.execute(
+            'SELECT user_id, submission from attempts where potd_id = ? and official = ? order by submit_time',
+            (problem.id, True))
+        attempts = cursor.fetchall()
+
+        # Put attempts into a dictionary instead of a list
+        attempts_dict = {}
+        for attempt in attempts:
+            if attempt[0] in attempts_dict:
+                attempts_dict[attempt[0]].append(attempt[1])
+            else:
+                attempts_dict[attempt[0]] = [attempt[1]]
+
+        cursor.execute('SELECT user, num_attempts from solves where problem_id = ? and official = ?',
+                       (problem.id, True))
+        solves = cursor.fetchall()
+        # Same with solves
+        solves_dict = {}
+        for solve in solves:
+            if solve[0] in solves_dict:
+                solves_dict[solve[0]].append(solve[1])
+            else:
+                solves_dict[solve[0]] = [solve[1]]
+
+        # See who actually solved it (with new answer)
+        new_solves = {}
+        for user in attempts_dict:
+            if new_answer in attempts_dict[user]:
+                # Find the place where they first submitted the right answer
+                new_solves[user] = attempts_dict[user].index(new_answer) + 1
+
+        # Make sets
+        new_solved_set = set((i for i in new_solves))
+        old_solved_set = set((i for i in solves_dict))
+
+        submitted_new_only = new_solved_set - old_solved_set
+        submitted_both_ans = new_solved_set.intersection(old_solved_set)
+        submitted_old_only = old_solved_set - new_solved_set
+
+        # DM people whom the change relates to
+        for user in submitted_new_only:
+            try:
+                await self.bot.get_user(user).send(f'The answer {new_answer} that you submitted on attempt '
+                                                   f'{new_solves[user]} is actually correct. ')
+                self.logger.info(
+                    f'[CHANGE ANS] [SUBMITTED NEW ONLY] User {user} solved after {new_solves[user]} attempts')
+            except Exception as e:
+                self.logger.warning(f'[CHANGE ANS] [SUBMITTED NEW ONLY] User {user} Exception when DMing {e}')
+
+        for user in submitted_both_ans:
+            try:
+                await self.bot.get_user(user).send(
+                    f'The answer has changed; the answer {new_answer} that you submitted on attempt '
+                    f'{new_solves[user]} is actually correct. ')
+                self.logger.info(
+                    f'[CHANGE ANS] [SUBMITTED BOTH ANS] User {user} solved after {new_solves[user]} attempts')
+            except Exception as e:
+                self.logger.warning(f'[CHANGE ANS] [SUBMITTED BOTH ANS] User {user} Exception when DMing {e}')
+
+        for user in submitted_old_only:
+            try:
+                await self.bot.get_user(user).send(
+                    f'The answer has changed; the previous answers you submitted are now incorrect. ')
+                self.logger.info(
+                    f'[CHANGE ANS] [SUBMITTED OLD ONLY] User {user} solved after {new_solves[user]} attempts')
+            except Exception as e:
+                self.logger.warning(f'[CHANGE ANS] [SUBMITTED OLD ONLY] User {user} Exception when DMing {e}')
+
+        # Sort out roles - give to those in new_ans and take from those in old_ans
+        cursor.execute('SELECT server_id, solved_role_id from config where solved_role_id is not null')
+        servers = cursor.fetchall()
+
+        for user in submitted_new_only:
+            await shared.assign_solved_role(servers, user, True, ctx)
+        for user in submitted_old_only:
+            await shared.assign_solved_role(servers, user, False, ctx)
+
+        # Update DB rankings
+        # Remove all solves
+        cursor.execute('DELETE FROM solves where problem_id = ?', (problem.id,))
+        self.bot.db.commit()
+
+        # Add the new rankings
+        cursor.executemany('INSERT INTO solves (user, problem_id, num_attempts, official)',
+                           [
+                               (user, problem.id, new_solves[user], True)
+                               for user in new_solves])
+        self.bot.db.commit()
+
+        # Update rankings
+        await self.bot.get_cog('Interface').update_rankings(problem.season)
+
 
 def setup(bot: openpotd.OpenPOTD):
     bot.add_cog(Management(bot))
