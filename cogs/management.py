@@ -496,8 +496,12 @@ class Management(commands.Cog):
                                for user in new_solves])
         self.bot.db.commit()
 
+        # Change the answer
+        cursor.execute('UPDATE problems SET answer = ? WHERE id = ?', (new_answer, problem.id))
+        self.bot.db.commit()
+
         # Update rankings
-        await self.bot.get_cog('Interface').update_rankings(problem.season)
+        self.bot.get_cog('Interface').update_rankings(problem.season)
 
 
 def setup(bot: openpotd.OpenPOTD):
