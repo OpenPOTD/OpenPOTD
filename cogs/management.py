@@ -490,7 +490,7 @@ class Management(commands.Cog):
         self.bot.db.commit()
 
         # Add the new rankings
-        cursor.executemany('INSERT INTO solves (user, problem_id, num_attempts, official)',
+        cursor.executemany('INSERT INTO solves (user, problem_id, num_attempts, official) VALUES (?, ?, ?, ?)',
                            [
                                (user, problem.id, new_solves[user], True)
                                for user in new_solves])
