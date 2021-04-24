@@ -28,7 +28,11 @@ class OpenPOTD(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.members = True
-        super().__init__(get_prefix, intents=intents)
+
+        allowed_mentions = discord.AllowedMentions.all()
+        allowed_mentions.everyone = False
+
+        super().__init__(get_prefix, intents=intents, allowed_mentions=allowed_mentions)
         self.config = config
         self.db = sqlite3.connect('data/data.db')
         logging.basicConfig(level=logging.INFO, format='[%(name)s %(levelname)s] %(message)s')
