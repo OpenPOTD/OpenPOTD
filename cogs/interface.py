@@ -112,8 +112,12 @@ class Interface(commands.Cog):
 
             # Calculate scores of each person
             total_score = {user[0]: 0 for user in ranked_users}
-            for solve in solves:
-                total_score[solve[0]] += problem_points[solve[1]] * weighted_score(solve[2])
+            if season > 11: 
+                for solve in solves:
+                    total_score[solve[0]] += problem_points[solve[1]] * weighted_score_new(solve[2])
+            else: 
+                for solve in solves:
+                    total_score[solve[0]] += problem_points[solve[1]] * weighted_score(solve[2])
 
             if potd_id == -1:
                 # Then we shall update all the potds
