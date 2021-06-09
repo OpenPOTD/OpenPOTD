@@ -18,8 +18,6 @@ def get_settings_embed(userid, cursor):
     else:
         embed.add_field(name='Nickname', value='None')
 
-    await ctx.send(embed=embed)
-
 
 class Settings(commands.Cog):
     def __init__(self, bot: openpotd.OpenPOTD):
