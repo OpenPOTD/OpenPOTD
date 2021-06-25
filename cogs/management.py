@@ -54,11 +54,8 @@ class Management(commands.Cog):
         # If there's no running season at all then it isn't really "running late" more like just
         # not even having a season
         if not running_seasons_exists:
-            for server in servers:
-                potd_channel = self.bot.get_channel(server[1])
-                if potd_channel is not None:
-                    self.bot.loop.create_task(potd_channel.send(f'There is no season in session today. '))
-                    self.logger.info(f'Informed server {server[0]} that there is no season today.')
+            # We just do nothing since we would have already announced the
+            # fact that no seasons are running. 
             return
 
         # If there's a running season but no problem then say
