@@ -437,7 +437,7 @@ class Interface(commands.Cog):
         potd_id = problem.id
 
         # Check that it's not part of a currently running season.
-        cursor.execute('SELECT name from seasons where latest_potd = ?', (potd_id,))
+        cursor.execute('SELECT name from seasons where latest_potd = ? and running = ?', (potd_id, True))
         seasons = cursor.fetchall()
         if len(seasons) > 0:
             await ctx.send(f'This {self.bot.config["otd_prefix"].lower()}otd is part of {seasons[0][0]}. '
