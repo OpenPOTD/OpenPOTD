@@ -135,6 +135,7 @@ class ServerConfig(commands.Cog):
         openpotd.prefixes[ctx.guild.id] = new
         cursor.execute('UPDATE config SET command_prefix = ? WHERE server_id = ?', (new, ctx.guild.id))
         self.bot.db.commit()
+        self.bot.command_prefix = new
         await ctx.send('Set successfully!')
 
     @commands.check(in_guild)
