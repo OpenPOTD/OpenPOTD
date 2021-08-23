@@ -173,7 +173,8 @@ class Interface(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.guild is not None or message.author.id == self.bot.user.id \
-                or message.content[0] == self.bot.config['prefix']:  # you can't submit answers in a server
+                or message.content[0] == self.bot.config['prefix']\
+                or message.author.id in self.bot.blacklist:  # you can't submit answers in a server
             return
 
         # Make sure it's time for submission
