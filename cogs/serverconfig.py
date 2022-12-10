@@ -151,5 +151,5 @@ class ServerConfig(commands.Cog):
         await ctx.send('Set successfully!')
 
 
-def setup(bot: openpotd.OpenPOTD):
-    bot.add_cog(ServerConfig(bot))
+async def setup(bot: openpotd.OpenPOTD):
+    await bot.add_cog(ServerConfig(bot))

@@ -518,5 +518,5 @@ class Interface(commands.Cog):
         await ctx.send('OpenPOTD Manual: ', file=discord.File('openpotd-manual.pdf'))
 
 
-def setup(bot: openpotd.OpenPOTD):
-    bot.add_cog(Interface(bot))
+async def setup(bot: openpotd.OpenPOTD):
+    await bot.add_cog(Interface(bot))

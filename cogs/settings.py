@@ -72,5 +72,5 @@ class Settings(commands.Cog):
                        embed=get_settings_embed(ctx.author.id, cursor))
 
 
-def setup(bot: openpotd.OpenPOTD):
-    bot.add_cog(Settings(bot))
+async def setup(bot: openpotd.OpenPOTD):
+    await bot.add_cog(Settings(bot))

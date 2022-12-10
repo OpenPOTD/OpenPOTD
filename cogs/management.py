@@ -501,5 +501,5 @@ class Management(commands.Cog):
         self.bot.get_cog('Interface').update_rankings(problem.season)
 
 
-def setup(bot: openpotd.OpenPOTD):
-    bot.add_cog(Management(bot))
+async def setup(bot: openpotd.OpenPOTD):
+    await bot.add_cog(Management(bot))
