@@ -172,7 +172,7 @@ class Management(commands.Cog):
             for i in range(1, len(images)):
                 await ctx.send(file=discord.File(io.BytesIO(images[i]), filename=f'POTD-{problem.id}-{i}.png'))
 
-    class UpdateFlags(commands.FlagConverter):
+    class UpdateFlags(commands.FlagConverter, delimiter=' ', prefix='--'):
         date: str = None
         season: int
         statement: str
@@ -181,7 +181,7 @@ class Management(commands.Cog):
         public: bool
         source: str = None
     @commands.check(authorised)
-    async def update(self, ctx, problem: shared.POTD, flags:UpdateFlags):
+    async def update(self, ctx, problem: shared.POTD, *, flags:UpdateFlags):
         potd = problem.id
         cursor = self.bot.db.cursor()
         if not flags.date is None and not bool(re.match(r'\d\d\d\d-\d\d-\d\d', flags.date)):
