@@ -26,8 +26,7 @@ def get_prefix(bot, message: discord.Message):
 
 class OpenPOTD(commands.Bot):
     def __init__(self):
-        intents = discord.Intents.default()
-        intents.members = True
+        intents = discord.Intents.all()
 
         allowed_mentions = discord.AllowedMentions.all()
         allowed_mentions.everyone = False
