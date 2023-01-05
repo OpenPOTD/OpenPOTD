@@ -8,7 +8,7 @@ import logging
 import discord
 import schedule
 from discord.ext import commands
-from discord.ext import flags
+from discord.ext.commands import BucketType, flags
 
 import openpotd
 import shared
@@ -172,25 +172,25 @@ class Management(commands.Cog):
             for i in range(1, len(images)):
                 await ctx.send(file=discord.File(io.BytesIO(images[i]), filename=f'POTD-{problem.id}-{i}.png'))
 
-    @flags.add_flag('--date')
-    @flags.add_flag('--season', type=int)
-    @flags.add_flag('--statement')
-    @flags.add_flag('--difficulty', type=int)
-    @flags.add_flag('--answer', type=int)
-    @flags.add_flag('--public', type=bool)
-    @flags.add_flag('--source')
-    @flags.command()
+    class UpdateFlags(commands.FlagConverter, delimiter=' ', prefix='--'):
+        date: str = None
+        season: int
+        statement: str
+        difficulty: int
+        answer: int
+        public: bool
+        source: str = None
     @commands.check(authorised)
-    async def update(self, ctx, problem: shared.POTD, **flags):
+    async def update(self, ctx, problem: shared.POTD, *, flags:UpdateFlags):
         potd = problem.id
         cursor = self.bot.db.cursor()
-        if not flags['date'] is None and not bool(re.match(r'\d\d\d\d-\d\d-\d\d', flags['date'])):
+        if not flags.date is None and not bool(re.match(r'\d\d\d\d-\d\d-\d\d', flags.date)):
             await ctx.send('Invalid date (specify yyyy-mm-dd)')
             return
 
-        for param in flags:
-            if flags[param] is not None:
-                cursor.execute(f'UPDATE problems SET {param} = ? WHERE id = ?', (flags[param], potd))
+        for param in vars(flags):
+            if vars(flags)[param] is not None:
+                cursor.execute(f'UPDATE problems SET {param} = ? WHERE id = ?', (vars(flags)[param], potd))
         self.bot.db.commit()
         await ctx.send(f'Updated {self.bot.config["otd_prefix"].lower()}otd. ')
 
@@ -501,5 +501,5 @@ class Management(commands.Cog):
         self.bot.get_cog('Interface').update_rankings(problem.season)
 
 
-def setup(bot: openpotd.OpenPOTD):
-    bot.add_cog(Management(bot))
+async def setup(bot: openpotd.OpenPOTD):
+    await bot.add_cog(Management(bot))

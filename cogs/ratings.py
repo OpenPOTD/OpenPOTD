@@ -235,5 +235,5 @@ class Ratings(commands.Cog):
         await choice(ctx)
 
 
-def setup(bot: openpotd.OpenPOTD):
-    bot.add_cog(Ratings(bot))
+async def setup(bot: openpotd.OpenPOTD):
+    await bot.add_cog(Ratings(bot))

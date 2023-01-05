@@ -87,5 +87,5 @@ class Menu:
             await self.message.remove_reaction('▶', self.ctx.me)
 
 
-def setup(bot: openpotd.OpenPOTD):
-    bot.add_cog(MenuManager(bot))
+async def setup(bot: openpotd.OpenPOTD):
+    await bot.add_cog(MenuManager(bot))
