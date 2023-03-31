@@ -383,7 +383,7 @@ class Interface(commands.Cog):
             await ctx.send(embed=embed)
         else:
             pages = []
-            for i in range(len(rankings) // 20 + 1):
+            for i in range(math.ceil(len(rankings)/20)):
                 page = discord.Embed(title=f'{szn_name} rankings - Page {i + 1}')
                 scores = '\n'.join(
                     [f'{rank}. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20 * i:20 * i + 20]])
