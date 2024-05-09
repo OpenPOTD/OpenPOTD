@@ -276,6 +276,7 @@ class Management(commands.Cog):
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT potd_channel from config where potd_channel is not null')
         potd_channels = [x[0] for x in cursor.fetchall()]
+        self.logger.info(f"[ANNOUNCE] Announcement created by {ctx.message.author.id}")
 
         for channel_id in potd_channels:
             channel: discord.TextChannel = self.bot.get_channel(channel_id)
