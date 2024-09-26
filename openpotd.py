@@ -11,10 +11,10 @@ from ruamel import yaml
 
 import sqlite3
 
+from state import prefixes
+
 cfgfile = open("config/config.yml")
 config = yaml.safe_load(cfgfile)
-
-prefixes = {}
 
 
 def get_prefix(bot, message: discord.Message):
@@ -47,8 +47,8 @@ class OpenPOTD(commands.Bot):
         # Populate prefixes
         cursor = self.db.cursor()
         cursor.execute('SELECT server_id, command_prefix FROM config WHERE command_prefix IS NOT NULL')
-        global prefixes
-        prefixes = {x[0]: x[1] for x in cursor.fetchall()}
+        for x in cursor.fetchall():
+            prefixes[x[0]] = x[1]
 
         # Set refreshing status
         self.posting_problem = False

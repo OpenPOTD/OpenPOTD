@@ -5,6 +5,7 @@ from discord.ext import commands
 from discord.ext.commands import has_permissions
 
 import openpotd
+from state import prefixes
 
 
 def in_guild(ctx: commands.Context):
@@ -132,7 +133,7 @@ class ServerConfig(commands.Cog):
     @commands.command(brief='Sets the server command prefix')
     async def command_prefix(self, ctx, new):
         cursor = self.bot.db.cursor()
-        openpotd.prefixes[ctx.guild.id] = new
+        prefixes[ctx.guild.id] = new
         cursor.execute('UPDATE config SET command_prefix = ? WHERE server_id = ?', (new, ctx.guild.id))
         self.bot.db.commit()
         await ctx.send('Set successfully!')
