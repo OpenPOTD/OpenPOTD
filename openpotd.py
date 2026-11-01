@@ -125,7 +125,13 @@ class OpenPOTD(commands.Bot):
             return
 
         if isinstance(error, app_commands.CheckFailure):
-            await self.respond(interaction, str(error) or "You are not authorised to use this command. ")
+            # A bare CheckFailure carries a developer-facing message from discord.py
+            # ('The check functions for command ... failed.'), so reply with our own.
+            # Subclasses (e.g. NoPrivateMessage) carry their own user-facing text.
+            if type(error) is app_commands.CheckFailure:
+                await self.respond(interaction, "You are not authorised to use this command. ")
+            else:
+                await self.respond(interaction, str(error))
 
         elif isinstance(error, app_commands.CommandOnCooldown):
             error: app_commands.CommandOnCooldown
@@ -133,6 +139,11 @@ class OpenPOTD(commands.Bot):
 
         elif isinstance(error, app_commands.TransformerError):
             await self.respond(interaction, 'Huh? {}'.format(error))
+
+        elif isinstance(error, app_commands.AppCommandError):
+            # Errors raised deliberately by our own code (e.g. POTDTransformer)
+            # propagate as-is and carry a user-facing message.
+            await self.respond(interaction, str(error))
         else:
             info = traceback.format_exception(type(error), error, error.__traceback__, chain=False)
             self.logger.error('Unhandled command exception - {}'.format(''.join(info)))

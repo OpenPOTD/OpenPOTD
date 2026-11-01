@@ -173,6 +173,9 @@ class Management(commands.Cog):
     @app_commands.describe(image='The image to attach to the problem. ')
     async def linkimg(self, interaction: discord.Interaction, problem: shared.POTDArgument,
                       image: discord.Attachment):
+        # Defer first: downloading the attachment can exceed the 3 second
+        # window in which the initial interaction response must arrive.
+        await interaction.response.defer(ephemeral=True)
         potd = problem.id
         save_path = io.BytesIO()
         await image.save(save_path)
@@ -181,8 +184,8 @@ class Management(commands.Cog):
                        (potd, sqlite3.Binary(save_path.getbuffer())))
         self.bot.db.commit()
         save_path.close()
-        await interaction.response.send_message(f'Linked an image to {self.bot.config["otd_prefix"]}OTD {potd}. ',
-                                                ephemeral=True)
+        await interaction.followup.send(f'Linked an image to {self.bot.config["otd_prefix"]}OTD {potd}. ',
+                                        ephemeral=True)
 
     @app_commands.command(description='Note: this is the admin version of the command so all problems are visible. ')
     @app_commands.check(authorised)
@@ -302,6 +305,9 @@ class Management(commands.Cog):
     @app_commands.command()
     @app_commands.check(authorised)
     async def announce(self, interaction: discord.Interaction, message: str):
+        # Defer first: the channel sends below can exceed the 3 second window
+        # in which the initial interaction response must arrive.
+        await interaction.response.defer(ephemeral=True)
         message = discord.utils.escape_mentions(message)
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT potd_channel from config where potd_channel is not null')
@@ -316,7 +322,7 @@ class Management(commands.Cog):
                 except Exception as e:
                     self.logger.warning(f"[ANNOUNCE] Can't send messages in {channel_id}")
 
-        await interaction.response.send_message('Announced!', ephemeral=True)
+        await interaction.followup.send('Announced!', ephemeral=True)
 
     @app_commands.command()
     @app_commands.check(authorised)
