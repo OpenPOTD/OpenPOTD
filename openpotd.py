@@ -1,37 +1,48 @@
 import logging
-import re
 import threading
 import time
 import traceback
+from datetime import date, datetime
 
 import discord
 import schedule
+from discord import app_commands
 from discord.ext import commands
-from ruamel import yaml
+from ruamel.yaml import YAML
 
 import sqlite3
 
+yaml = YAML(typ='safe')
 cfgfile = open("config/config.yml")
-config = yaml.safe_load(cfgfile)
-
-prefixes = {}
+config = yaml.load(cfgfile)
 
 
-def get_prefix(bot, message: discord.Message):
-    if message.guild is None or message.guild.id not in prefixes:
-        return config['prefix']
-    else:
-        return prefixes[message.guild.id]
+def adapt_date(val: date):
+    return val.isoformat()
+
+
+def adapt_datetime(val: datetime):
+    return val.isoformat(sep=' ')
+
+
+# The default sqlite3 adapters were deprecated in Python 3.12; register our own
+# producing the exact same formats the database already stores.
+sqlite3.register_adapter(date, adapt_date)
+sqlite3.register_adapter(datetime, adapt_datetime)
 
 
 class OpenPOTD(commands.Bot):
     def __init__(self):
-        intents = discord.Intents.all()
+        # No privileged intents are needed: commands are slash commands (their
+        # payloads arrive through interactions) and answers are submitted in
+        # DMs, which always carry their content. command_prefix is only a
+        # required argument of commands.Bot; it never applies any more.
+        intents = discord.Intents.default()
 
         allowed_mentions = discord.AllowedMentions.all()
         allowed_mentions.everyone = False
 
-        super().__init__(get_prefix, intents=intents, allowed_mentions=allowed_mentions)
+        super().__init__(commands.when_mentioned, intents=intents, allowed_mentions=allowed_mentions)
         self.config = config
         self.db = sqlite3.connect('data/data.db')
         logging.basicConfig(level=logging.INFO, format='[%(name)s %(levelname)s] %(message)s')
@@ -44,19 +55,14 @@ class OpenPOTD(commands.Bot):
         except IOError:
             self.blacklist = []
 
-        # Populate prefixes
-        cursor = self.db.cursor()
-        cursor.execute('SELECT server_id, command_prefix FROM config WHERE command_prefix IS NOT NULL')
-        global prefixes
-        prefixes = {x[0]: x[1] for x in cursor.fetchall()}
-
         # Set refreshing status
         self.posting_problem = False
+
+        self.tree.on_error = self.on_app_command_error
 
     async def on_ready(self):
         self.logger.info('Connected to Discord')
         self.logger.info('Guilds  : {}'.format(len(self.guilds)))
-        self.logger.info('Users   : {}'.format(len(set(self.get_all_members()))))
         self.logger.info('Channels: {}'.format(len(list(self.get_all_channels()))))
         await self.set_presence(self.config['presence'])
 
@@ -68,75 +74,67 @@ class OpenPOTD(commands.Bot):
             else:
                 self.logger.info('Loaded cog {}.'.format(cog))
 
+        await self.tree.sync()
+
         self.logger.info(f'Schedule: {schedule.jobs}')
 
     async def on_message(self, message):
-        if message.author.bot: return
-        if message.author.id in self.blacklist: return
-        await self.process_commands(message)
+        # Prefix commands were removed; the Interface cog listens for answer
+        # submissions in DMs on its own, so the bot processes no messages.
+        pass
 
     async def set_presence(self, text):
         game = discord.Game(name=text)
         await self.change_presence(activity=game)
 
-    async def on_command_error(self, ctx: commands.Context, exception: Exception):
-        if isinstance(exception, commands.CommandInvokeError):
-            # all exceptions are wrapped in CommandInvokeError if they are not a subclass of CommandError
+    async def respond(self, interaction: discord.Interaction, content: str):
+        """Send an ephemeral error message, coping with commands that had already
+        deferred or replied before failing. """
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(content, ephemeral=True)
+            else:
+                await interaction.response.send_message(content, ephemeral=True)
+        except discord.HTTPException:
+            pass
+
+    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.CommandInvokeError):
+            # all exceptions are wrapped in CommandInvokeError if they are not a subclass of AppCommandError
             # you can access the original exception with .original
-            exception: commands.CommandInvokeError
-            if isinstance(exception.original, discord.Forbidden):
+            error: app_commands.CommandInvokeError
+            if isinstance(error.original, discord.Forbidden):
                 # permissions error
-                try:
-                    await ctx.send('Permissions error: `{}`'.format(exception))
-                except discord.Forbidden:
-                    # we can't send messages in that channel
-                    pass
+                await self.respond(interaction, 'Permissions error: `{}`'.format(error.original))
                 return
 
-            elif isinstance(exception.original, discord.HTTPException):
-                try:
-                    await ctx.send('Sorry, I can\'t send that.')
-                except discord.Forbidden:
-                    pass
-
+            elif isinstance(error.original, discord.HTTPException):
+                await self.respond(interaction, 'Sorry, I can\'t send that.')
                 return
 
             # Print to log then notify developers
             try:
-                lines = traceback.format_exception(type(exception),
-                                                   exception,
-                                                   exception.__traceback__)
+                lines = traceback.format_exception(type(error.original),
+                                                   error.original,
+                                                   error.original.__traceback__)
             except RecursionError:
-                raise exception
+                raise error
 
             self.logger.error(''.join(lines))
 
             return
 
-        if isinstance(exception, commands.CheckFailure):
-            await ctx.send("You are not authorised to use this command. ")
-        elif isinstance(exception, commands.CommandOnCooldown):
-            exception: commands.CommandOnCooldown
-            await ctx.send(f'You\'re going too fast! Try again in {exception.retry_after:.2f} seconds.')
+        if isinstance(error, app_commands.CheckFailure):
+            await self.respond(interaction, str(error) or "You are not authorised to use this command. ")
 
-        elif isinstance(exception, commands.CommandNotFound):
-            if isinstance(ctx.channel, discord.DMChannel):
-                await ctx.send("Command not recognised!")
+        elif isinstance(error, app_commands.CommandOnCooldown):
+            error: app_commands.CommandOnCooldown
+            await self.respond(interaction, f'You\'re going too fast! Try again in {error.retry_after:.2f} seconds.')
 
-        elif isinstance(exception, commands.UserInputError):
-            error = ' '.join(exception.args)
-            error_data = re.findall('Converting to \"(.*)\" failed for parameter \"(.*)\"\.', error)
-            if not error_data:
-                await ctx.send('Huh? {}'.format(' '.join(exception.args)))
-            else:
-                if error_data[0][0][0] in 'aeiouAEIOU':
-                    anindicator = 'n'
-                else:
-                    anindicator = ''
-                await ctx.send(
-                    'Huh? I thought `{1}` was supposed to be a{2} `{0}`...'.format(*error_data[0], anindicator))
+        elif isinstance(error, app_commands.TransformerError):
+            await self.respond(interaction, 'Huh? {}'.format(error))
         else:
-            info = traceback.format_exception(type(exception), exception, exception.__traceback__, chain=False)
+            info = traceback.format_exception(type(error), error, error.__traceback__, chain=False)
             self.logger.error('Unhandled command exception - {}'.format(''.join(info)))
 
     async def started_posting(self):

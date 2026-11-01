@@ -3,12 +3,14 @@ import re
 import sqlite3
 from datetime import date
 from datetime import datetime
+from typing import Optional
+
 import logging
 
 import discord
 import schedule
+from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import BucketType, flags
 
 import openpotd
 import shared
@@ -16,8 +18,8 @@ import shared
 authorised_set = set()
 
 
-def authorised(ctx):
-    return ctx.author.id in authorised_set
+def authorised(interaction: discord.Interaction) -> bool:
+    return interaction.user.id in authorised_set
 
 
 class Management(commands.Cog):
@@ -27,7 +29,12 @@ class Management(commands.Cog):
         self.logger = logging.getLogger('management')
         schedule.every().day.at(self.bot.config['posting_time']).do(self.schedule_potd)
         global authorised_set
-        authorised_set = self.bot.config['authorised']
+        authorised_set = set(self.bot.config['authorised'] or [])
+
+        # Replicate the old global blacklist check: no command may run for a
+        # blacklisted user.
+        for command in self.__cog_app_commands__:
+            command.add_check(shared.not_blacklisted)
 
     def schedule_potd(self):
         self.bot.loop.create_task(self.advance_potd())
@@ -72,6 +79,12 @@ class Management(commands.Cog):
         potd_id = result[0][0]
         problem = shared.POTD(result[0][0], self.bot.db)
 
+        # The solved role is held by the people the bot gave it to, i.e. the
+        # solvers of the problem that has just finished. Without the members
+        # intent the database is the only way to enumerate them.
+        cursor.execute('SELECT latest_potd from seasons where running = ? and latest_potd is not null', (True,))
+        previous_potds = [x[0] for x in cursor.fetchall()]
+
         for server in servers:
             # Post the problem
             try:
@@ -79,19 +92,28 @@ class Management(commands.Cog):
             except Exception:
                 self.logger.warning(f'Server {server[0]} channel doesn\'t exist.')
 
-            # Remove the solved role from everyone
+            # Remove the solved role from everyone who has it
             role_id = server[3]
             if role_id is not None:
                 try:
-                    self.bot.logger.warning('Config variable solved_role_id is not set!')
                     guild = self.bot.get_guild(server[0])
                     if guild.get_role(role_id) is not None:
-                        role = guild.get_role(role_id)
-                        for member in role.members:
-                            if member.id not in authorised_set:
-                                await member.remove_roles(role)
+                        for previous_potd_id in previous_potds:
+                            cursor.execute('SELECT user from solves where problem_id = ?', (previous_potd_id,))
+                            for user_id in [x[0] for x in cursor.fetchall()]:
+                                if user_id not in authorised_set:
+                                    try:
+                                        await self.bot.http.remove_role(server[0], user_id, role_id)
+                                    except discord.NotFound:
+                                        # The user is no longer in the guild
+                                        continue
+                                    except discord.Forbidden:
+                                        self.logger.warning(f'Server {server[0]}: missing permissions to remove '
+                                                            f'role {role_id} from {user_id}. ')
                 except Exception as e:
                     self.logger.warning(f'Server {server[0]}, {e}')
+            else:
+                self.bot.logger.warning('Config variable solved_role_id is not set!')
 
         # Advance the season
         cursor.execute('SELECT season FROM problems WHERE id = ?', (potd_id,))
@@ -113,105 +135,110 @@ class Management(commands.Cog):
         # Let the bot and users know we are done posting the problem
         await self.bot.finished_posting()
 
-    @commands.command()
-    @commands.check(authorised)
-    async def post(self, ctx):
+    @app_commands.command()
+    @app_commands.check(authorised)
+    async def post(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         await self.advance_potd()
+        await interaction.followup.send('Done!', ephemeral=True)
 
-    @commands.command()
-    @commands.check(authorised)
-    async def newseason(self, ctx, *, name):
+    @app_commands.command()
+    @app_commands.check(authorised)
+    async def newseason(self, interaction: discord.Interaction, name: str):
         cursor = self.bot.db.cursor()
         cursor.execute('''INSERT INTO seasons (running, name) VALUES (?, ?)''', (False, name))
         self.bot.db.commit()
         cursor.execute('''SELECT LAST_INSERT_ROWID()''')
         rowid = cursor.fetchone()[0]
-        await ctx.send(f'Added a new season called `{name}` with id `{rowid}`. ')
-        self.logger.info(f'{ctx.author.id} added a new season called {name} with id {rowid}. ')
+        await interaction.response.send_message(f'Added a new season called `{name}` with id `{rowid}`. ')
+        self.logger.info(f'{interaction.user.id} added a new season called {name} with id {rowid}. ')
 
-    @commands.command()
-    @commands.check(authorised)
-    async def add(self, ctx, season: int, prob_date, answer, *, statement):
+    @app_commands.command()
+    @app_commands.check(authorised)
+    async def add(self, interaction: discord.Interaction, season: int, prob_date: str, answer: int, statement: str):
+        try:
+            prob_date_parsed = date.fromisoformat(prob_date)
+        except ValueError:
+            await interaction.response.send_message('Invalid date (specify yyyy-mm-dd)', ephemeral=True)
+            return
         cursor = self.bot.db.cursor()
-        prob_date_parsed = date.fromisoformat(prob_date)
         cursor.execute('''INSERT INTO problems ("date", season, statement, answer, public) VALUES (?, ?, ?, ?, ?)''',
                        (prob_date_parsed, season, statement, answer, False))
         self.bot.db.commit()
-        await ctx.send(f'Added problem. ID: `{cursor.lastrowid}`.')
-        self.logger.info(f'{ctx.author.id} added a new problem. ')
+        await interaction.response.send_message(f'Added problem. ID: `{cursor.lastrowid}`.')
+        self.logger.info(f'{interaction.user.id} added a new problem. ')
 
-    @commands.command()
-    @commands.check(authorised)
-    async def linkimg(self, ctx, problem: shared.POTD):
+    @app_commands.command()
+    @app_commands.check(authorised)
+    async def linkimg(self, interaction: discord.Interaction, problem: shared.POTDArgument):
         potd = problem.id
-        if len(ctx.message.attachments) < 1:
-            await ctx.send("No attached file. ")
+        if len(interaction.attachments) < 1:
+            await interaction.response.send_message("No attached file. ", ephemeral=True)
             return
         else:
             save_path = io.BytesIO()
-            await ctx.message.attachments[0].save(save_path)
+            await interaction.attachments[0].save(save_path)
             cursor = self.bot.db.cursor()
             cursor.execute('''INSERT INTO images (potd_id, image) VALUES (?, ?)''',
                            (potd, sqlite3.Binary(save_path.getbuffer())))
             self.bot.db.commit()
             save_path.close()
+            await interaction.response.send_message(f'Linked an image to {self.bot.config["otd_prefix"]}OTD {potd}. ',
+                                                    ephemeral=True)
 
-    @commands.command()
-    @commands.check(authorised)
-    async def showpotd(self, ctx, *, problem: shared.POTD):
-        """Note: this is the admin version of the command so all problems are visible. """
-
+    @app_commands.command(description='Note: this is the admin version of the command so all problems are visible. ')
+    @app_commands.check(authorised)
+    async def showpotd(self, interaction: discord.Interaction, problem: shared.POTDArgument):
         images = problem.images
         if len(images) == 0:
-            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {problem.id} of {problem.date} has no picture '
-                           f'attached. ')
+            await interaction.response.send_message(f'{self.bot.config["otd_prefix"]}OTD {problem.id} of '
+                                                    f'{problem.date} has no picture attached. ')
         else:
-            await ctx.send(f'{self.bot.config["otd_prefix"]}OTD {problem.id} of {problem.date}',
-                           file=discord.File(io.BytesIO(images[0]),
-                                             filename=f'POTD-{problem.id}-0.png'))
+            await interaction.response.send_message(f'{self.bot.config["otd_prefix"]}OTD {problem.id} of {problem.date}',
+                                                    file=discord.File(io.BytesIO(images[0]),
+                                                                      filename=f'POTD-{problem.id}-0.png'))
             for i in range(1, len(images)):
-                await ctx.send(file=discord.File(io.BytesIO(images[i]), filename=f'POTD-{problem.id}-{i}.png'))
+                await interaction.followup.send(file=discord.File(io.BytesIO(images[i]),
+                                                                  filename=f'POTD-{problem.id}-{i}.png'))
 
-    class UpdateFlags(commands.FlagConverter, delimiter=' ', prefix='--'):
-        date: str = None
-        season: int
-        statement: str
-        difficulty: int
-        answer: int
-        public: bool
-        source: str = None
-    @commands.check(authorised)
-    async def update(self, ctx, problem: shared.POTD, *, flags:UpdateFlags):
+    @app_commands.command()
+    @app_commands.check(authorised)
+    async def update(self, interaction: discord.Interaction, problem: shared.POTDArgument,
+                     date: Optional[str] = None, season: Optional[int] = None, statement: Optional[str] = None,
+                     difficulty: Optional[int] = None, answer: Optional[int] = None, public: Optional[bool] = None,
+                     source: Optional[str] = None):
         potd = problem.id
         cursor = self.bot.db.cursor()
-        if not flags.date is None and not bool(re.match(r'\d\d\d\d-\d\d-\d\d', flags.date)):
-            await ctx.send('Invalid date (specify yyyy-mm-dd)')
+        if not date is None and not bool(re.match(r'\d\d\d\d-\d\d-\d\d', date)):
+            await interaction.response.send_message('Invalid date (specify yyyy-mm-dd)', ephemeral=True)
             return
 
-        for param in vars(flags):
-            if vars(flags)[param] is not None:
-                cursor.execute(f'UPDATE problems SET {param} = ? WHERE id = ?', (vars(flags)[param], potd))
+        params = {'date': date, 'season': season, 'statement': statement, 'difficulty': difficulty,
+                  'answer': answer, 'public': public, 'source': source}
+        for param in params:
+            if params[param] is not None:
+                cursor.execute(f'UPDATE problems SET {param} = ? WHERE id = ?', (params[param], potd))
         self.bot.db.commit()
-        await ctx.send(f'Updated {self.bot.config["otd_prefix"].lower()}otd. ')
+        await interaction.response.send_message(f'Updated {self.bot.config["otd_prefix"].lower()}otd. ')
 
-    @commands.command(name='pinfo')
-    @commands.check(authorised)
-    async def info(self, ctx, problem: shared.POTD):
+    @app_commands.command(name='pinfo')
+    @app_commands.check(authorised)
+    async def info(self, interaction: discord.Interaction, problem: shared.POTDArgument):
         info = problem.info()
         embed = discord.Embed(title=f'{self.bot.config["otd_prefix"]}OTD {problem.id}')
         for i in range(len(info)):
             embed.add_field(name=info[i][0], value=f'`{info[i][1]}`', inline=False)
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
 
-    @commands.command()
-    @commands.check(authorised)
-    async def start_season(self, ctx, season: int):
+    @app_commands.command()
+    @app_commands.check(authorised)
+    async def start_season(self, interaction: discord.Interaction, season: int):
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT running from seasons where seasons.id = ?', (season,))
         result = cursor.fetchall()
 
         if len(result) == 0:
-            await ctx.send(f'No season with id {season}.')
+            await interaction.response.send_message(f'No season with id {season}.', ephemeral=True)
             return
 
         running = result[0][0]
@@ -219,18 +246,19 @@ class Management(commands.Cog):
             cursor.execute('UPDATE seasons SET running = ? where seasons.id = ?', (True, season))
             self.bot.db.commit()
             self.logger.info(f'Started season with id {season}. ')
+            await interaction.response.send_message(f'Started season with id {season}. ', ephemeral=True)
         else:
-            await ctx.send(f'Season {season} already running!')
+            await interaction.response.send_message(f'Season {season} already running!', ephemeral=True)
 
-    @commands.command()
-    @commands.check(authorised)
-    async def end_season(self, ctx, season: int):
+    @app_commands.command()
+    @app_commands.check(authorised)
+    async def end_season(self, interaction: discord.Interaction, season: int):
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT running from seasons where seasons.id = ?', (season,))
         result = cursor.fetchall()
 
         if len(result) == 0:
-            await ctx.send(f'No season with id {season}.')
+            await interaction.response.send_message(f'No season with id {season}.', ephemeral=True)
             return
 
         running = result[0][0]
@@ -238,45 +266,49 @@ class Management(commands.Cog):
             cursor.execute('UPDATE seasons SET running = ? where seasons.id = ?', (False, season))
             self.bot.db.commit()
             self.logger.info(f'Ended season with id {season}. ')
+            await interaction.response.send_message(f'Ended season with id {season}. ', ephemeral=True)
         else:
-            await ctx.send(f'Season {season} already stopped!')
+            await interaction.response.send_message(f'Season {season} already stopped!', ephemeral=True)
 
-    @commands.command()
-    @commands.is_owner()
-    async def execute_sql(self, ctx, *, sql):
+    @app_commands.command()
+    @app_commands.check(shared.is_owner)
+    async def execute_sql(self, interaction: discord.Interaction, sql: str):
         cursor = self.bot.db.cursor()
         try:
             cursor.execute(sql)
         except Exception as e:
-            await ctx.send(e)
-        await ctx.send(str(cursor.fetchall()))
+            await interaction.response.send_message(str(e), ephemeral=True)
+            return
+        await interaction.response.send_message(str(cursor.fetchall()), ephemeral=True)
 
-    @commands.command()
-    @commands.is_owner()
-    async def init_nicks(self, ctx):
+    @app_commands.command()
+    @app_commands.check(shared.is_owner)
+    async def init_nicks(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT discord_id from users where nickname is NULL')
         users_to_check = [x[0] for x in cursor.fetchall()]
 
         to_update = []
         for user_id in users_to_check:
-            user: discord.User = self.bot.get_user(user_id)
-            if user is not None:
+            try:
+                user: discord.User = await self.bot.fetch_user(user_id)
                 to_update.append((user.display_name, user_id))
-            else:
+            except discord.NotFound:
                 to_update.append(('Unknown', user_id))
 
         cursor.executemany('UPDATE users SET nickname = ? where discord_id = ?', to_update)
         self.bot.db.commit()
-        await ctx.send('Done!')
+        await interaction.followup.send('Done!', ephemeral=True)
 
-    @commands.command()
-    @commands.check(authorised)
-    async def announce(self, ctx, *, message: commands.clean_content):
+    @app_commands.command()
+    @app_commands.check(authorised)
+    async def announce(self, interaction: discord.Interaction, message: str):
+        message = discord.utils.escape_mentions(message)
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT potd_channel from config where potd_channel is not null')
         potd_channels = [x[0] for x in cursor.fetchall()]
-        self.logger.info(f"[ANNOUNCE] Announcement created by {ctx.message.author.id}")
+        self.logger.info(f"[ANNOUNCE] Announcement created by {interaction.user.id}")
 
         for channel_id in potd_channels:
             channel: discord.TextChannel = self.bot.get_channel(channel_id)
@@ -286,9 +318,11 @@ class Management(commands.Cog):
                 except Exception as e:
                     self.logger.warning(f"[ANNOUNCE] Can't send messages in {channel_id}")
 
-    @commands.command()
-    @commands.check(authorised)
-    async def set_cutoffs(self, ctx, season: int, bronze: int, silver: int, gold: int):
+        await interaction.response.send_message('Announced!', ephemeral=True)
+
+    @app_commands.command()
+    @app_commands.check(authorised)
+    async def set_cutoffs(self, interaction: discord.Interaction, season: int, bronze: int, silver: int, gold: int):
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT EXISTS (select 1 from seasons where id = ?)', (season,))
         season_exists = cursor.fetchall()[0][0]
@@ -296,19 +330,20 @@ class Management(commands.Cog):
             cursor.execute('UPDATE seasons SET bronze_cutoff = ?, silver_cutoff = ?, gold_cutoff = ? WHERE id = ?',
                            (bronze, silver, gold, season))
             self.bot.db.commit()
-            await ctx.send('Done!')
+            await interaction.response.send_message('Done!')
         else:
-            await ctx.send('No season with that ID!')
+            await interaction.response.send_message('No season with that ID!', ephemeral=True)
 
-    @commands.command()
-    @commands.check(authorised)
-    async def assign_roles(self, ctx, season: int):
+    @app_commands.command()
+    @app_commands.check(authorised)
+    async def assign_roles(self, interaction: discord.Interaction, season: int):
+        await interaction.response.defer(ephemeral=True)
         cursor = self.bot.db.cursor()
         cursor.execute('SELECT bronze_cutoff, silver_cutoff, gold_cutoff from seasons WHERE id = ?', (season,))
         result = cursor.fetchall()
 
         if len(result) == 0:
-            await ctx.send('No such season!')
+            await interaction.followup.send('No such season!', ephemeral=True)
             return
 
         cutoffs = result[0]
@@ -331,6 +366,13 @@ class Management(commands.Cog):
         golds = [x[0] for x in cursor.fetchall()]
         medallers = [bronzes, silvers, golds]
 
+        # Medal roles are only ever given out by this command, so everyone who
+        # could hold one is recorded in the rankings (any season, since the
+        # same roles are reused). Without the members intent this is the only
+        # way to enumerate the holders.
+        cursor.execute('SELECT DISTINCT user_id from rankings')
+        ranked_users = [x[0] for x in cursor.fetchall()]
+
         for server in servers:
             server_id = server[0]
             guild: discord.Guild = self.bot.get_guild(server_id)
@@ -339,7 +381,11 @@ class Management(commands.Cog):
                 self.logger.warning(f'[{server_id}] Trying to assign roles: No such guild {server_id}')
                 continue
 
-            self_member: discord.Member = guild.get_member(self.bot.user.id)
+            try:
+                self_member: discord.Member = await guild.fetch_member(self.bot.user.id)
+            except discord.NotFound:
+                self.logger.warning(f'[{server_id}] Trying to assign roles: Not a member of guild {server_id}')
+                continue
             if not discord.Permissions.manage_roles.flag & self_member.guild_permissions.value:
                 self.logger.warning(f'[{server_id}] Trying to assign roles: No permissions in guild {server_id}')
                 continue
@@ -351,10 +397,12 @@ class Management(commands.Cog):
                     if medal_role is None:
                         self.logger.warning(f'[{server_id}] Trying to assign roles: Guild {server_id} has no role {x}')
                         continue
-                    for user in medal_role.members:
-                        user: discord.Member
+                    for user_id in ranked_users:
                         try:
-                            await user.remove_roles(medal_role)
+                            await self.bot.http.remove_role(server_id, user_id, x)
+                        except discord.NotFound:
+                            # The user is no longer in the guild
+                            continue
                         except Exception as e:
                             self.logger.warning(f'[{server_id}] Trying to assign roles: '
                                                 f'Guild {server_id} missing permissions. ')
@@ -366,42 +414,47 @@ class Management(commands.Cog):
                 if server[x + 1] is not None:
                     medal_role: discord.Role = guild.get_role(server[x + 1])
                     if medal_role is None:
-                        self.logger.warning(f'[{server_id}] No role {medal_role} ({x})')
+                        self.logger.warning(f'[{server_id}] No role {server[x + 1]} ({x})')
                         continue
                     for user_id in medallers[x]:
-                        if guild.get_member(user_id) is not None:
-                            member: discord.Member = guild.get_member(user_id)
-                            try:
-                                await member.add_roles(medal_role)
-                            except Exception as e:
-                                self.logger.warning(f'[{server_id}] Trying to assign roles: '
-                                                    f'Guild {server_id} missing permissions. [{user_id}]')
-                            self.logger.info(f'[{server_id}] Gave {user_id} role {medal_role.name}')
+                        try:
+                            await self.bot.http.add_role(server_id, user_id, server[x + 1])
+                        except discord.NotFound:
+                            # The user is no longer in the guild
+                            continue
+                        except Exception as e:
+                            self.logger.warning(f'[{server_id}] Trying to assign roles: '
+                                                f'Guild {server_id} missing permissions. [{user_id}]')
+                            continue
+                        self.logger.info(f'[{server_id}] Gave {user_id} role {medal_role.name}')
 
-        await ctx.send('Done!')
+        await interaction.followup.send('Done!', ephemeral=True)
 
-    @commands.command()
-    @commands.check(authorised)
-    async def clear_imgs(self, ctx, *, problem: shared.POTD):
+    @app_commands.command()
+    @app_commands.check(authorised)
+    async def clear_imgs(self, interaction: discord.Interaction, problem: shared.POTDArgument):
         cursor = self.bot.db.cursor()
         cursor.execute('DELETE FROM images WHERE potd_id = ?', (problem.id,))
         self.bot.db.commit()
 
-        await ctx.send('Cleared images!')
+        await interaction.response.send_message('Cleared images!')
 
-    @commands.command()
-    @commands.check(authorised)
-    async def force_update(self, ctx, *, season: int):
+    @app_commands.command()
+    @app_commands.check(authorised)
+    async def force_update(self, interaction: discord.Interaction, season: int):
+        await interaction.response.defer(ephemeral=True)
         try:
             self.bot.get_cog('Interface').update_rankings(season)
         except Exception as e:
-            await ctx.send(e)
+            await interaction.followup.send(str(e), ephemeral=True)
+            return
 
-        await ctx.send('Done!')
+        await interaction.followup.send('Done!', ephemeral=True)
 
-    @commands.command()
-    @commands.check(authorised)
-    async def change_answer(self, ctx, problem: shared.POTD, new_answer: int):
+    @app_commands.command()
+    @app_commands.check(authorised)
+    async def change_answer(self, interaction: discord.Interaction, problem: shared.POTDArgument, new_answer: int):
+        await interaction.response.defer(ephemeral=True)
         # Get all attempts and current solves
         cursor = self.bot.db.cursor()
 
@@ -447,8 +500,9 @@ class Management(commands.Cog):
         # DM people whom the change relates to
         for user in submitted_new_only:
             try:
-                await self.bot.get_user(user).send(f'The answer {new_answer} that you submitted on attempt '
-                                                   f'{new_solves[user]} is actually correct. ')
+                user_obj = await self.bot.fetch_user(user)
+                await user_obj.send(f'The answer {new_answer} that you submitted on attempt '
+                                    f'{new_solves[user]} is actually correct. ')
                 self.logger.info(
                     f'[CHANGE ANS] [SUBMITTED NEW ONLY] User {user} solved after {new_solves[user]} attempts')
             except Exception as e:
@@ -456,7 +510,8 @@ class Management(commands.Cog):
 
         for user in submitted_both_ans:
             try:
-                await self.bot.get_user(user).send(
+                user_obj = await self.bot.fetch_user(user)
+                await user_obj.send(
                     f'The answer has changed; the answer {new_answer} that you submitted on attempt '
                     f'{new_solves[user]} is actually correct. ')
                 self.logger.info(
@@ -466,10 +521,10 @@ class Management(commands.Cog):
 
         for user in submitted_old_only:
             try:
-                await self.bot.get_user(user).send(
+                user_obj = await self.bot.fetch_user(user)
+                await user_obj.send(
                     f'The answer has changed; the previous answers you submitted are now incorrect. ')
-                self.logger.info(
-                    f'[CHANGE ANS] [SUBMITTED OLD ONLY] User {user} solved after {new_solves[user]} attempts')
+                self.logger.info(f'[CHANGE ANS] [SUBMITTED OLD ONLY] User {user} no longer solves the problem')
             except Exception as e:
                 self.logger.warning(f'[CHANGE ANS] [SUBMITTED OLD ONLY] User {user} Exception when DMing {e}')
 
@@ -478,9 +533,9 @@ class Management(commands.Cog):
         servers = cursor.fetchall()
 
         for user in submitted_new_only:
-            await shared.assign_solved_role(servers, user, True, ctx)
+            await shared.assign_solved_role(servers, user, True, self.bot)
         for user in submitted_old_only:
-            await shared.assign_solved_role(servers, user, False, ctx)
+            await shared.assign_solved_role(servers, user, False, self.bot)
 
         # Update DB rankings
         # Remove all solves
@@ -500,6 +555,8 @@ class Management(commands.Cog):
 
         # Update rankings
         self.bot.get_cog('Interface').update_rankings(problem.season)
+
+        await interaction.followup.send('Done!', ephemeral=True)
 
 
 async def setup(bot: openpotd.OpenPOTD):

@@ -27,8 +27,8 @@ into the `config/token.txt` file.
 ### Using OpenPOTD
 
 1. Edit the `config/config.yml` file to your liking. 
-1. Add a new season with the `%newseason` command. 
-1. Add problems with the `%add` command. 
-1. Link images to problems with the `%linkimg` command. 
+1. Add a new season with the `/newseason` command. 
+1. Add problems with the `/add` command. 
+1. Link images to problems with the `/linkimg` command. 
 1. The bot should post problems at the specified time 
 every day and alert if there is no problem. 

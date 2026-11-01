@@ -1,12 +1,12 @@
 import io
 import logging
-import math
-from datetime import datetime
-import datetime as dt
+from datetime import timedelta
 import random
 
 import discord
+from discord import app_commands
 from discord.ext import commands
+from typing import Optional
 
 import openpotd
 import shared
@@ -30,30 +30,35 @@ class Interface(commands.Cog):
         self.logger = logging.getLogger('interface')
         self.cooldowns = {}
 
-    @commands.command()
-    @commands.check(lambda ctx: False)  # This command is disabled since it only applies for multi-server config
-    async def register(self, ctx, *, season):
+        # Replicate the old global blacklist check: no command may run for a
+        # blacklisted user.
+        for command in self.__cog_app_commands__:
+            command.add_check(shared.not_blacklisted)
+
+    @app_commands.command()
+    @app_commands.check(lambda interaction: False)  # This command is disabled since it only applies for multi-server config
+    async def register(self, interaction: discord.Interaction, season: str):
         cursor = self.bot.db.cursor()
-        cursor.execute('''SELECT id from seasons where name = ? and server_id = ?''', (season, ctx.guild.id))
+        cursor.execute('''SELECT id from seasons where name = ? and server_id = ?''', (season, interaction.guild.id))
         ids = cursor.fetchall()
         if len(ids) == 0:
-            await ctx.send('No such season!')
+            await interaction.response.send_message('No such season!', ephemeral=True)
             return
         else:
             season_id = ids[0][0]
         cursor.execute('''INSERT OR IGNORE INTO users (discord_id, nickname, anonymous) VALUES (?, ?, ?)''',
-                       (ctx.author.id, ctx.author.display_name, True))
+                       (interaction.user.id, interaction.user.display_name, True))
 
         cursor.execute('''SELECT EXISTS (SELECT 1 from registrations WHERE registrations.user_id = ? 
-                            AND registrations.season_id = ?)''', (ctx.author.id, season_id))
+                            AND registrations.season_id = ?)''', (interaction.user.id, season_id))
         existence = cursor.fetchall()[0][0]
         if existence:
-            await ctx.send("You've already signed up for this season!")
+            await interaction.response.send_message("You've already signed up for this season!", ephemeral=True)
             return
         else:
             cursor.execute('''INSERT into registrations (user_id, season_id) VALUES (?, ?)''',
-                           (ctx.author.id, season_id))
-            await ctx.send(f"Registered you for {season}. ")
+                           (interaction.user.id, season_id))
+            await interaction.response.send_message(f"Registered you for {season}. ")
         self.bot.db.commit()
 
     def update_rankings(self, season: int, potd_id: int = -1):
@@ -112,10 +117,10 @@ class Interface(commands.Cog):
 
             # Calculate scores of each person
             total_score = {user[0]: 0 for user in ranked_users}
-            if season > 11: 
+            if season > 11:
                 for solve in solves:
                     total_score[solve[0]] += problem_points[solve[1]] * weighted_score_new(solve[2])
-            else: 
+            else:
                 for solve in solves:
                     total_score[solve[0]] += problem_points[solve[1]] * weighted_score(solve[2])
 
@@ -173,7 +178,7 @@ class Interface(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.guild is not None or message.author.id == self.bot.user.id \
-                or message.content[0] == self.bot.config['prefix']\
+                or not message.content \
                 or message.author.id in self.bot.blacklist:  # you can't submit answers in a server
             return
 
@@ -200,10 +205,10 @@ class Interface(commands.Cog):
         cursor = self.bot.db.cursor()
 
         # Check cooldowns
-        if self.bot.config['cooldown']:
-            if message.author.id in self.cooldowns and self.cooldowns[message.author.id] > datetime.utcnow():
+        if self.bot.config.get('cooldown', False):
+            if message.author.id in self.cooldowns and self.cooldowns[message.author.id] > shared.utc_now():
                 await message.channel.send(f"You're on cooldown! Send another answer in "
-                                           f"{(self.cooldowns[message.author.id] - datetime.utcnow()).total_seconds():.2f} seconds. ")
+                                           f"{(self.cooldowns[message.author.id] - shared.utc_now()).total_seconds():.2f} seconds. ")
                 return
 
         # Get the current answer from the database
@@ -224,12 +229,12 @@ class Interface(commands.Cog):
             correct_answer, potd_id, season_id = correct_answer_list[0][0], correct_answer_list[0][1], \
                                                  correct_answer_list[0][2]
 
-            if self.bot.config['cooldown']:
+            if self.bot.config.get('cooldown', False):
                 cursor.execute('SELECT count() from attempts where user_id = ? and potd_id = ?',
                                (message.author.id, potd_id))
                 num_attempts = cursor.fetchall()[0][0]
                 cool_down = 10 if num_attempts < 5 else 1800 if num_attempts == 5 else 1000000
-                self.cooldowns[message.author.id] = datetime.utcnow() + dt.timedelta(seconds=cool_down)
+                self.cooldowns[message.author.id] = shared.utc_now() + timedelta(seconds=cool_down)
 
             # Put a ranking entry in for them
             cursor.execute('INSERT or IGNORE into rankings (season_id, user_id) VALUES (?, ?)',
@@ -247,12 +252,12 @@ class Interface(commands.Cog):
             try:
                 cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time) '
                                'VALUES (?, ?, ?, ?, ?)',
-                               (message.author.id, potd_id, True, int(message.content), datetime.utcnow()))
+                               (message.author.id, potd_id, True, answer, shared.utc_now()))
                 self.bot.db.commit()
             except OverflowError:
                 cursor.execute('INSERT into attempts (user_id, potd_id, official, submission, submit_time '
                                'VALUES (?, ?, ?, ?, ?)',
-                               (message.author.id, potd_id, True, -1000, datetime.utcnow()))
+                               (message.author.id, potd_id, True, -1000, shared.utc_now()))
                 self.bot.db.commit()
 
             # Calculate the number of attempts
@@ -285,8 +290,9 @@ class Interface(commands.Cog):
                     if guild is None:
                         continue
 
-                    member: discord.Member = guild.get_member(message.author.id)
-                    if member is None:
+                    try:
+                        member: discord.Member = await guild.fetch_member(message.author.id)
+                    except discord.NotFound:
                         continue
 
                     solved_role: discord.Role = guild.get_role(server[1])
@@ -294,7 +300,7 @@ class Interface(commands.Cog):
                         continue
 
                     try:
-                        await member.add_roles(solved_role, reason=f'Solved POTD')
+                        await member.add_roles(solved_role, reason='Solved POTD')
                     except Exception as e:
                         self.logger.warning(e)
 
@@ -313,14 +319,15 @@ class Interface(commands.Cog):
                 self.logger.info(
                     f'User {message.author.id} submitted incorrect answer {answer} for {self.bot.config["otd_prefix"].lower()}otd {potd_id}. ')
 
-    @commands.command()
-    async def score(self, ctx, season: int = None):
+    @app_commands.command()
+    async def score(self, interaction: discord.Interaction, season: Optional[int] = None):
         cursor = self.bot.db.cursor()
         if season is None:
             cursor.execute('SELECT id, name from seasons where running = ?', (True,))
             running_seasons = cursor.fetchall()
             if len(running_seasons) == 0:
-                await ctx.send('No current running season. Please specify a season. ')
+                await interaction.response.send_message('No current running season. Please specify a season. ',
+                                                        ephemeral=True)
                 return
             else:
                 season = running_seasons[0][0]
@@ -329,18 +336,19 @@ class Interface(commands.Cog):
             cursor.execute('SELECT id, name from seasons where id = ?', (season,))
             selected_seasons = cursor.fetchall()
             if len(selected_seasons) == 0:
-                await ctx.send(f'No season with id {season}. Please specify a valid season. ')
+                await interaction.response.send_message(f'No season with id {season}. Please specify a valid season. ',
+                                                        ephemeral=True)
                 return
             else:
                 season = selected_seasons[0][0]
                 szn_name = selected_seasons[0][1]
 
-        cursor.execute('SELECT rank, score from rankings where season_id = ? and user_id = ?', (season, ctx.author.id))
+        cursor.execute('SELECT rank, score from rankings where season_id = ? and user_id = ?', (season, interaction.user.id))
         rank = cursor.fetchall()
         if len(rank) == 0:
-            await ctx.send('You are not ranked in this season!')
+            await interaction.response.send_message('You are not ranked in this season!', ephemeral=True)
         else:
-            embed = discord.Embed(title=f'{szn_name} ranking for {ctx.author.name}')
+            embed = discord.Embed(title=f'{szn_name} ranking for {interaction.user.name}')
             if rank[0][0] <= 3:
                 colours = [0xc9b037, 0xd7d7d7, 0xad8a56]  # gold, silver, bronze
                 embed.colour = discord.Color(colours[rank[0][0] - 1])
@@ -348,16 +356,17 @@ class Interface(commands.Cog):
                 embed.colour = discord.Color(0xffffff)
             embed.add_field(name='Rank', value=rank[0][0])
             embed.add_field(name='Score', value=f'{rank[0][1]:.2f}')
-            await ctx.send(embed=embed)
+            await interaction.response.send_message(embed=embed)
 
-    @commands.command()
-    async def rank(self, ctx, season: int = None):
+    @app_commands.command()
+    async def rank(self, interaction: discord.Interaction, season: Optional[int] = None):
         cursor = self.bot.db.cursor()
         if season is None:
             cursor.execute('SELECT id, name from seasons where running = ?', (True,))
             running_seasons = cursor.fetchall()
             if len(running_seasons) == 0:
-                await ctx.send('No current running season. Please specify a season. ')
+                await interaction.response.send_message('No current running season. Please specify a season. ',
+                                                        ephemeral=True)
                 return
             else:
                 season = running_seasons[0][0]
@@ -366,7 +375,8 @@ class Interface(commands.Cog):
             cursor.execute('SELECT id, name from seasons where id = ?', (season,))
             selected_seasons = cursor.fetchall()
             if len(selected_seasons) == 0:
-                await ctx.send(f'No season with id {season}. Please specify a valid season. ')
+                await interaction.response.send_message(f'No season with id {season}. Please specify a valid season. ',
+                                                        ephemeral=True)
                 return
             else:
                 season = selected_seasons[0][0]
@@ -376,11 +386,10 @@ class Interface(commands.Cog):
         rankings = cursor.fetchall()
 
         if len(rankings) <= 20:
-            # If there are less than 20 rankings, we don't need a whole menu (in fact dpymenus will throw us an error)
             embed = discord.Embed(title=f'{szn_name} rankings')
             scores = '\n'.join([f'`{rank}`. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings])
             embed.description = scores
-            await ctx.send(embed=embed)
+            await interaction.response.send_message(embed=embed)
         else:
             pages = []
             for i in range(len(rankings) // 20 + 1):
@@ -389,21 +398,26 @@ class Interface(commands.Cog):
                     [f'`{rank}`. {score:.2f} [<@!{user_id}>]' for (rank, score, user_id) in rankings[20 * i:20 * i + 20]])
                 page.description = scores
                 pages.append(page)
-            await self.bot.get_cog('MenuManager').new_menu(ctx, pages)
+            menu_cog = self.bot.get_cog('MenuManager')
+            if menu_cog is None:
+                # The menus cog isn't loaded; just show the first page.
+                await interaction.response.send_message(embed=pages[0])
+            else:
+                await menu_cog.new_menu(interaction, pages)
 
-    @commands.command()
-    async def fetch(self, ctx, *, problem: shared.POTD):
-        if not await problem.ensure_public(ctx):
+    @app_commands.command()
+    async def fetch(self, interaction: discord.Interaction, problem: shared.POTDArgument):
+        if not await problem.ensure_public(interaction):
             return
 
         potd_id = problem.id
         cursor = self.bot.db.cursor()
 
         # Calculate the otd prefix
-        if ctx.guild is None:
+        if interaction.guild is None:
             otd_prefix = self.bot.config["otd_prefix"]
         else:
-            cursor.execute('SELECT otd_prefix from config WHERE server_id = ?', (ctx.guild.id,))
+            cursor.execute('SELECT otd_prefix from config WHERE server_id = ?', (interaction.guild.id,))
             result = cursor.fetchall()
             if len(result) == 0:
                 otd_prefix = self.bot.config["otd_prefix"]
@@ -417,21 +431,22 @@ class Interface(commands.Cog):
         cursor.execute('''SELECT image FROM images WHERE potd_id = ?''', (potd_id,))
         images = cursor.fetchall()
         if len(images) == 0:
-            await ctx.send(f'{otd_prefix}OTD {potd_id} of {potd_date} has no picture attached. ')
+            await interaction.response.send_message(f'{otd_prefix}OTD {potd_id} of {potd_date} has no picture attached. ')
         else:
-            await ctx.send(f'{otd_prefix}OTD {potd_id} of {potd_date}',
-                           file=discord.File(io.BytesIO(images[0][0]),
-                                             filename=f'POTD-{potd_id}-0.png'))
+            await interaction.response.send_message(f'{otd_prefix}OTD {potd_id} of {potd_date}',
+                                                    file=discord.File(io.BytesIO(images[0][0]),
+                                                                      filename=f'POTD-{potd_id}-0.png'))
             for i in range(1, len(images)):
-                await ctx.send(file=discord.File(io.BytesIO(images[i][0]), filename=f'POTD-{potd_id}-{i}.png'))
+                await interaction.followup.send(file=discord.File(io.BytesIO(images[i][0]),
+                                                                  filename=f'POTD-{potd_id}-{i}.png'))
 
         # Log this stuff
         self.logger.info(
-            f'User {ctx.author.id} requested {self.bot.config["otd_prefix"]}OTD with date {potd_date} and number {potd_id}. ')
+            f'User {interaction.user.id} requested {self.bot.config["otd_prefix"]}OTD with date {potd_date} and number {potd_id}. ')
 
-    @commands.command()
-    async def check(self, ctx, problem: shared.POTD, answer: int):
-        if not await problem.ensure_public(ctx):
+    @app_commands.command()
+    async def check(self, interaction: discord.Interaction, problem: shared.POTDArgument, answer: int):
+        if not await problem.ensure_public(interaction):
             return
 
         cursor = self.bot.db.cursor()
@@ -441,8 +456,9 @@ class Interface(commands.Cog):
         cursor.execute('SELECT name from seasons where latest_potd = ? and running = ?', (potd_id, True))
         seasons = cursor.fetchall()
         if len(seasons) > 0:
-            await ctx.send(f'This {self.bot.config["otd_prefix"].lower()}otd is part of {seasons[0][0]}. '
-                           f'Please just DM your answer for this {self.bot.config["otd_prefix"]}OTD to me. ')
+            await interaction.response.send_message(f'This {self.bot.config["otd_prefix"].lower()}otd is part of {seasons[0][0]}. '
+                                                    f'Please just DM your answer for this {self.bot.config["otd_prefix"]}OTD to me. ',
+                                                    ephemeral=True)
             return
 
         # Get the correct answer
@@ -452,70 +468,71 @@ class Interface(commands.Cog):
 
         # See whether they've solved it before
         cursor.execute('SELECT exists (select * from solves where solves.user = ? and solves.problem_id = ?)',
-                       (ctx.author.id, potd_id))
+                       (interaction.user.id, potd_id))
         solved_before = cursor.fetchall()[0][0]
 
         # Make sure the user is registered
         cursor.execute('''INSERT OR IGNORE INTO users (discord_id, nickname, anonymous) VALUES (?, ?, ?)''',
-                       (ctx.author.id, ctx.author.display_name, True))
+                       (interaction.user.id, interaction.user.display_name, True))
 
         # Record an attempt even if they've solved before
         cursor.execute('INSERT INTO attempts (user_id, potd_id, official, submission, submit_time) VALUES (?,?,?,?,?)',
-                       (ctx.author.id, potd_id, False, answer, datetime.now()))
+                       (interaction.user.id, potd_id, False, answer, shared.utc_now()))
 
         # Get the number of both official and unofficial attempts
         cursor.execute('SELECT COUNT(1) from attempts WHERE user_id = ? and potd_id = ? and official = ?',
-                       (ctx.author.id, potd_id, True))
+                       (interaction.user.id, potd_id, True))
         official_attempts = cursor.fetchall()[0][0]
         cursor.execute('SELECT COUNT(1) from attempts WHERE user_id = ? and potd_id = ? and official = ?',
-                       (ctx.author.id, potd_id, False))
+                       (interaction.user.id, potd_id, False))
         unofficial_attempts = cursor.fetchall()[0][0]
 
+        # All responses are ephemeral so the answer the user submits isn't revealed
+        # to anyone else (this replaces the old message deletion).
         if answer_is_correct:
             if not solved_before:
                 # Record that they solved it.
                 cursor.execute('INSERT INTO solves (user, problem_id, num_attempts, official) VALUES (?, ?, ?, ?)',
-                               (ctx.author.id, potd_id, official_attempts + unofficial_attempts, False))
-                await ctx.send(
+                               (interaction.user.id, potd_id, official_attempts + unofficial_attempts, False))
+                await interaction.response.send_message(
                     f'Nice job! You solved {self.bot.config["otd_prefix"]}OTD `{potd_id}` after `{official_attempts + unofficial_attempts}` '
-                    f'attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ')
+                    f'attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ',
+                    ephemeral=True)
             else:
                 # Don't need to record that they solved it.
-                await ctx.send(f'Nice job! However you solved this {self.bot.config["otd_prefix"]}OTD already. ')
+                await interaction.response.send_message(f'Nice job! However you solved this {self.bot.config["otd_prefix"]}OTD already. ',
+                                                        ephemeral=True)
 
             # Log this stuff
-            self.logger.info(f'[Unofficial] User {ctx.author.id} solved {self.bot.config["otd_prefix"]}OTD {potd_id}')
+            self.logger.info(f'[Unofficial] User {interaction.user.id} solved {self.bot.config["otd_prefix"]}OTD {potd_id}')
         else:
-            await ctx.send(f"Sorry! That's the wrong answer. You've had `{official_attempts + unofficial_attempts}` "
-                           f"attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ")
+            await interaction.response.send_message(f"Sorry! That's the wrong answer. You've had `{official_attempts + unofficial_attempts}` "
+                                                    f"attempts (`{official_attempts}` official and `{unofficial_attempts}` unofficial). ",
+                                                    ephemeral=True)
 
             # Log this stuff
             self.logger.info(
-                f'[Unofficial] User {ctx.author.id} submitted wrong answer {answer} for '
+                f'[Unofficial] User {interaction.user.id} submitted wrong answer {answer} for '
                 f'{self.bot.config["otd_prefix"]}OTD {potd_id}. ')
-
-        # Delete the message if it's in a guild
-        if ctx.guild is not None:
-            await ctx.message.delete()
 
         # Still should refresh the embed
         await self.update_embed(potd_id)
 
         self.bot.db.commit()
 
-    @commands.command(brief='Some information about the bot. ')
-    async def info(self, ctx):
+    @app_commands.command(description='Some information about the bot. ')
+    async def info(self, interaction: discord.Interaction):
         embed = discord.Embed(description='OpenPOTD is a bot that posts short answer questions once a day for you '
                                           'to solve. OpenPOTD is open-source, and you can find our GitHub repository '
                                           'at https://github.com/IcosahedralDice/OpenPOTD. \n'
                                           'Have a bug report? Want to propose some problems? Join the OpenPOTD '
                                           'development server at https://discord.gg/ub2Y8b8zpt. \n'
-                                          'Get the OpenPOTD manual with the `manual` command. ')
-        await ctx.send(embed=embed)
+                                          'Get the OpenPOTD manual with the `/manual` command. ')
+        await interaction.response.send_message(embed=embed)
 
-    @commands.command(brief='Download the OpenPOTD manual. ')
-    async def manual(self, ctx):
-        await ctx.send('OpenPOTD Manual: ', file=discord.File('openpotd-manual.pdf'))
+    @app_commands.command(description='Download the OpenPOTD manual. ')
+    async def manual(self, interaction: discord.Interaction):
+        await interaction.response.send_message('OpenPOTD Manual: ', file=discord.File('openpotd-manual.pdf'))
 
 
 async def setup(bot: openpotd.OpenPOTD):

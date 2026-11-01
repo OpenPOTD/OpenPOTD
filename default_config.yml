@@ -1,12 +1,14 @@
 token: token.txt
 blacklist: blacklist.txt
-prefix: '%'
 
 # Discord presence
-presence: "Use %help. "
+presence: "Use /help. "
 
 # Number of points someone would receive if they are the only one to solve a problem
 base_points: 1000
+
+# Whether to apply an escalating cooldown on answer submissions
+cooldown: true
 
 # Scheduled posting time of POTDs
 posting_time:

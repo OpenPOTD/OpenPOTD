@@ -1,7 +1,9 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 import openpotd
+import shared
 
 
 def get_settings_embed(userid, cursor):
@@ -25,51 +27,59 @@ class Settings(commands.Cog):
     def __init__(self, bot: openpotd.OpenPOTD):
         self.bot = bot
 
-    @commands.command()
-    async def nick(self, ctx, *, new_nick):
+        # Replicate the old global blacklist check: no command may run for a
+        # blacklisted user.
+        for command in self.__cog_app_commands__:
+            command.add_check(shared.not_blacklisted)
+
+    @app_commands.command(description='Sets your nickname. ')
+    async def nick(self, interaction: discord.Interaction, new_nick: str):
         if len(new_nick) > 32:
-            await ctx.send('Nickname is too long!')
+            await interaction.response.send_message('Nickname is too long!', ephemeral=True)
             return
 
         cursor = self.bot.db.cursor()
         cursor.execute('''INSERT OR IGNORE INTO users (discord_id, nickname, anonymous) VALUES (?, ?, ?)''',
-                       (ctx.author.id, ctx.author.display_name, True))
-        cursor.execute('UPDATE users SET nickname = ? WHERE discord_id = ?', (new_nick, ctx.author.id))
+                       (interaction.user.id, interaction.user.display_name, True))
+        cursor.execute('UPDATE users SET nickname = ? WHERE discord_id = ?', (new_nick, interaction.user.id))
         self.bot.db.commit()
+        await interaction.response.send_message('Done!', ephemeral=True)
 
-    @commands.command(name='self')
-    async def userinfo(self, ctx):
-        await ctx.send(embed=get_settings_embed(ctx.author.id, self.bot.db.cursor()))
+    @app_commands.command(name='self', description='Shows your current settings. ')
+    async def userinfo(self, interaction: discord.Interaction):
+        await interaction.response.send_message(embed=get_settings_embed(interaction.user.id, self.bot.db.cursor()))
 
-    @commands.command()
-    async def toggle_anon(self, ctx):
+    @app_commands.command()
+    async def toggle_anon(self, interaction: discord.Interaction):
         cursor = self.bot.db.cursor()
-        cursor.execute('SELECT anonymous from users where discord_id = ?', (ctx.author.id,))
+        cursor.execute('SELECT anonymous from users where discord_id = ?', (interaction.user.id,))
         result = cursor.fetchall()
 
         if len(result) == 0:
-            await ctx.send('You are not registered.')
+            await interaction.response.send_message('You are not registered.', ephemeral=True)
         else:
-            cursor.execute('UPDATE users SET anonymous = ? WHERE discord_id = ?', (not result[0][0], ctx.author.id))
+            cursor.execute('UPDATE users SET anonymous = ? WHERE discord_id = ?', (not result[0][0], interaction.user.id))
             self.bot.db.commit()
+            await interaction.response.send_message('Thank you! Your settings have been updated. Here are your new settings:',
+                                                    embed=get_settings_embed(interaction.user.id, cursor))
 
-        await ctx.send('Thank you! Your settings have been updated. Here are your new settings:',
-                       embed=get_settings_embed(ctx.author.id, cursor))
-
-    @commands.command()
-    async def receive_medals(self, ctx, new_setting: bool):
+    @app_commands.command()
+    async def receive_medals(self, interaction: discord.Interaction, new_setting: bool):
         cursor = self.bot.db.cursor()
-        cursor.execute('UPDATE users SET receiving_medal_roles = ? WHERE discord_id = ?', (new_setting, ctx.author.id))
+        cursor.execute('UPDATE users SET receiving_medal_roles = ? WHERE discord_id = ?',
+                       (new_setting, interaction.user.id))
         self.bot.db.commit()
 
         if cursor.rowcount == 1:
-            await ctx.send('Changed successfully!')
+            await interaction.response.send_message('Changed successfully!')
+            ephemeral = False
         else:
-            await ctx.send(f'No changes, either you are not registered or receive_medals '
-                           f'was already set to {new_setting}. ')
+            await interaction.response.send_message(f'No changes, either you are not registered or receive_medals '
+                                                    f'was already set to {new_setting}. ', ephemeral=True)
+            ephemeral = True
 
-        await ctx.send('Thank you! Your settings have been updated. Here are your new settings:',
-                       embed=get_settings_embed(ctx.author.id, cursor))
+        await interaction.followup.send('Thank you! Your settings have been updated. Here are your new settings:',
+                                        embed=get_settings_embed(interaction.user.id, cursor), ephemeral=ephemeral)
 
 
 async def setup(bot: openpotd.OpenPOTD):

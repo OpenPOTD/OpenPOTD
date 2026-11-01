@@ -16,8 +16,8 @@ class MenuManager(commands.Cog):
             await self.active_menus[menu_id].remove()
             del self.active_menus[menu_id]
 
-    async def new_menu(self, ctx: commands.Context, pages: list, cur_page: int = 0, timeout: int = 60):
-        menu = Menu(ctx, pages, cur_page, timeout)
+    async def new_menu(self, interaction: discord.Interaction, pages: list, cur_page: int = 0, timeout: int = 60):
+        menu = Menu(interaction, pages, cur_page, timeout)
         await menu.open()
         self.active_menus[menu.message.id] = menu
         await self.delete_after(timeout, menu.message.id)
@@ -53,17 +53,17 @@ class MenuManager(commands.Cog):
 
 class Menu:
 
-    def __init__(self, ctx: commands.Context, pages: list, cur_page: int = 0, timeout: int = 60):
+    def __init__(self, interaction: discord.Interaction, pages: list, cur_page: int = 0, timeout: int = 60):
         assert not len(pages) == 0
-        self.ctx = ctx
+        self.interaction = interaction
         self.pages = pages
         self.message = None
-        self.id = ctx.message.id
         self.cur_page = cur_page
-        self.owner = ctx.author.id
+        self.owner = interaction.user.id
 
     async def open(self):
-        self.message = await self.ctx.send(embed=self.pages[self.cur_page])
+        await self.interaction.response.send_message(embed=self.pages[self.cur_page])
+        self.message = await self.interaction.original_response()
         await self.message.add_reaction('◀')
         await self.message.add_reaction('⏹')
         await self.message.add_reaction('▶')
@@ -82,9 +82,9 @@ class Menu:
         try:
             await self.message.clear_reactions()
         except discord.Forbidden as e:
-            await self.message.remove_reaction('◀', self.ctx.me)
-            await self.message.remove_reaction('⏹', self.ctx.me)
-            await self.message.remove_reaction('▶', self.ctx.me)
+            await self.message.remove_reaction('◀', self.message.author)
+            await self.message.remove_reaction('⏹', self.message.author)
+            await self.message.remove_reaction('▶', self.message.author)
 
 
 async def setup(bot: openpotd.OpenPOTD):

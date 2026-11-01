@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 import sqlite3
 import logging
@@ -13,12 +14,12 @@ from dataclasses import dataclass
 from datetime import datetime
 
 
-def select_two_problems(conn: sqlite3.Connection, ctx, field):
+def select_two_problems(conn: sqlite3.Connection, interaction: discord.Interaction, field):
     cursor = conn.cursor()
-    userid = ctx.author.id
+    userid = interaction.user.id
 
     # Authorised members don't have to solve a problem to be able to rate it.
-    if not mgmt.authorised(ctx):
+    if not mgmt.authorised(interaction):
         cursor.execute('SELECT solves.problem_id FROM solves WHERE solves.id IN (SELECT id FROM solves WHERE'
                        ' solves.user = ? ORDER BY RANDOM() LIMIT 1)', (userid,))
     else:
@@ -28,7 +29,7 @@ def select_two_problems(conn: sqlite3.Connection, ctx, field):
     first_problem = shared.POTD(first_problem_id, conn)
 
     # Same with the second problem
-    if not mgmt.authorised(ctx):
+    if not mgmt.authorised(interaction):
         cursor.execute('select problems.id from solves inner '
                        'join problems on solves.problem_id = problems.id where solves.id in (select id from '
                        f'solves where solves.user = ? and solves.problem_id != ?) order by abs(problems.{field} '
@@ -64,18 +65,28 @@ class Ratings(commands.Cog):
         self.waiting_for = {}
         self.logger = logging.getLogger('Ratings')
 
-    @commands.command(brief="Rate two problems you've been given.", aliases=['rt', 'r'])
-    async def rate(self, ctx, *, rating):
-        if ctx.author.id not in self.waiting_for:
-            await ctx.send("You haven't got any problems to rate! "
-                           "Get some with `%rate_difficulty` or `%rate_coolness`.")
+        # Replicate the old global blacklist check: no command may run for a
+        # blacklisted user.
+        for command in self.__cog_app_commands__:
+            command.add_check(shared.not_blacklisted)
+
+    @app_commands.command(description="Rate two problems you've been given.")
+    @app_commands.choices(rating=[
+        app_commands.Choice(name='First problem', value='1'),
+        app_commands.Choice(name='Second problem', value='2'),
+        app_commands.Choice(name='They are the same', value='n'),
+        app_commands.Choice(name='No preference', value='d'),
+    ])
+    async def rate(self, interaction: discord.Interaction, rating: app_commands.Choice[str]):
+        rating = rating.value
+
+        if interaction.user.id not in self.waiting_for:
+            await interaction.response.send_message("You haven't got any problems to rate! "
+                                                    "Get some with `/rate_difficulty` or `/rate_quality`.",
+                                                    ephemeral=True)
             return
 
-        if rating not in ('1', '2', 'n', 'd'):
-            await ctx.send("That's not a valid rating! Use `d` if you want to abandon ratings.")
-            return
-
-        choices: ChoiceInformation = self.waiting_for[ctx.author.id]
+        choices: ChoiceInformation = self.waiting_for[interaction.user.id]
         cursor = self.bot.db.cursor()
 
         # Get number of ratings for each problem and calculate elo K value
@@ -91,13 +102,13 @@ class Ratings(commands.Cog):
         # Log rating
         cursor.execute('INSERT INTO rating_choices (problem_1_id, problem_2_id, choice, type, rater) '
                        'VALUES (?, ?, ?, ?, ?)',
-                       (choices.p1.id, choices.p2.id, rating, choices.type, ctx.author.id))
+                       (choices.p1.id, choices.p2.id, rating, choices.type, interaction.user.id))
         self.bot.db.commit()
 
         # If it doesn't care, void
         if rating == 'd':
-            await ctx.send("Thank you for your rating.")
-            del self.waiting_for[ctx.author.id]
+            await interaction.response.send_message("Thank you for your rating.")
+            del self.waiting_for[interaction.user.id]
             return
 
         # Calculate elo stuffs
@@ -143,96 +154,78 @@ class Ratings(commands.Cog):
 
         else:
             self.bot.logger.error(f'[RATING] No such type {choices.type}')
+            await interaction.response.send_message('Something went wrong with your rating. ', ephemeral=True)
             return
 
-        await ctx.send(f"Thank you for your rating. The ratings for the two problems were {old_1:.2f} and {old_2:.2f} "
-                       f"respectively and they have changed to {new_1:.2f} and {new_2:.2f} respectively.")
+        await interaction.response.send_message(f"Thank you for your rating. The ratings for the two problems were "
+                                                f"{old_1:.2f} and {old_2:.2f} "
+                                                f"respectively and they have changed to {new_1:.2f} and {new_2:.2f} "
+                                                f"respectively.")
 
-        del self.waiting_for[ctx.author.id]
+        del self.waiting_for[interaction.user.id]
 
         self.logger.info(f'[RATE] User {choices.user.id} rated {choices.p1.id} and {choices.p2.id} PREFERENCE '
                          f'{rating} TYPE {choices.type}')
 
-    @commands.command(brief="Grab two problems you've solved to compare the difficulty of. ", aliases=['rd'])
-    async def rate_difficulty(self, ctx):
-        if ctx.author.id in self.waiting_for:
-            await ctx.send('You are already trying to rate problems! If you want to cancel, use `%rate d`.')
+    async def start_rating(self, interaction: discord.Interaction, field: str, type_str: str, comparison: str,
+                           equality_noun: str):
+        if interaction.user.id in self.waiting_for:
+            await interaction.response.send_message('You are already trying to rate problems! If you want to cancel, '
+                                                    'use `/rate` with the "No preference" option.', ephemeral=True)
             return
 
         try:
-            problem_1, problem_2 = select_two_problems(self.bot.db, ctx, 'difficulty_rating')
-        except IndexError as e:
-            await ctx.send("You need to have solved at least two problems!")
+            problem_1, problem_2 = select_two_problems(self.bot.db, interaction, field)
+        except IndexError:
+            await interaction.response.send_message("You need to have solved at least two problems!", ephemeral=True)
             return
 
         if len(problem_1.images) > 0:
-            await ctx.send('Which of the following two problems do you think is **harder**? \nProblem 1: ',
-                           file=discord.File(io.BytesIO(problem_1.images[0]), filename='image.png'))
+            await interaction.response.send_message(f'Which of the following two problems do you think is '
+                                                    f'**{comparison}**? \nProblem 1: ',
+                                                    file=discord.File(io.BytesIO(problem_1.images[0]),
+                                                                      filename='image.png'))
         else:
-            await ctx.send('Which of the following two problems do you think is **harder**? \nProblem 1: ')
+            await interaction.response.send_message(f'Which of the following two problems do you think is '
+                                                    f'**{comparison}**? \nProblem 1: ')
 
         for image in problem_1.images[1:]:
-            await ctx.send(file=discord.File(io.BytesIO(image), filename='image.png'))
+            await interaction.followup.send(file=discord.File(io.BytesIO(image), filename='image.png'))
 
         if len(problem_2.images) > 0:
-            await ctx.send('Problem 2: ',
-                           file=discord.File(io.BytesIO(problem_2.images[0]), filename='image.png'))
+            await interaction.followup.send('Problem 2: ',
+                                            file=discord.File(io.BytesIO(problem_2.images[0]), filename='image.png'))
         else:
-            await ctx.send('Problem 2: ')
+            await interaction.followup.send('Problem 2: ')
 
         for image in problem_2.images[1:]:
-            await ctx.send(file=discord.File(io.BytesIO(image), filename='image.png'))
+            await interaction.followup.send(file=discord.File(io.BytesIO(image), filename='image.png'))
 
-        await ctx.send(f'Use `%rate OPTION` to submit your rating. Possible values for `OPTION` are: \n'
-                       f'`1` if you thought the first problem was **harder**, \n'
-                       f'`2` if you thought the second problem was **harder**, \n'
-                       f'`n` if you think they are the same difficulty, or \n'
-                       f'`d` if you have no preference (can\'t decide). ')
+        await interaction.followup.send(f'Use `/rate` to submit your rating. Possible values for `rating` are: \n'
+                                        f'`First problem` if you thought the first problem was **{comparison}**, \n'
+                                        f'`Second problem` if you thought the second problem was **{comparison}**, \n'
+                                        f'`They are the same` if you think they are the same {equality_noun}, or \n'
+                                        f'`No preference` if you have no preference (can\'t decide). ')
 
-        self.waiting_for[ctx.author.id] = ChoiceInformation(ctx.author, problem_1, problem_2, datetime.now(), 'DIFF')
+        self.waiting_for[interaction.user.id] = ChoiceInformation(interaction.user, problem_1, problem_2,
+                                                                  shared.utc_now(), type_str)
 
-    @commands.command(brief="Grab two problems you've solved to compare the coolness of. ", aliases=['rq'])
-    async def rate_quality(self, ctx):
-        if ctx.author.id in self.waiting_for:
-            await ctx.send('You are already trying to rate problems! If you want to cancel, use `%rate d`.')
-            return
+    @app_commands.command(description="Grab two problems you've solved to compare the difficulty of. ")
+    async def rate_difficulty(self, interaction: discord.Interaction):
+        await self.start_rating(interaction, 'difficulty_rating', 'DIFF', 'harder', 'difficulty')
 
-        try:
-            problem_1, problem_2 = select_two_problems(self.bot.db, ctx, 'coolness_rating')
-        except IndexError as e:
-            await ctx.send("You need to have solved at least two problems!")
-            return
+    @app_commands.command(description="Grab two problems you've solved to compare the coolness of. ")
+    async def rate_quality(self, interaction: discord.Interaction):
+        await self.start_rating(interaction, 'coolness_rating', 'COOL', 'cooler', 'quality')
 
-        if len(problem_1.images) > 0:
-            await ctx.send('Which of the following two problems do you think is **cooler**? \nProblem 1: ',
-                           file=discord.File(io.BytesIO(problem_1.images[0]), filename='image.png'))
-        else:
-            await ctx.send('Which of the following two problems do you think is **cooler**? \nProblem 1: ')
-
-        for image in problem_1.images[1:]:
-            await ctx.send(file=discord.File(io.BytesIO(image), filename='image.png'))
-
-        if len(problem_2.images) > 0:
-            await ctx.send('Problem 2: ',
-                           file=discord.File(io.BytesIO(problem_2.images[0]), filename='image.png'))
-        else:
-            await ctx.send('Problem 2: ')
-
-        for image in problem_2.images[1:]:
-            await ctx.send(file=discord.File(io.BytesIO(image), filename='image.png'))
-
-        await ctx.send(f'Use `%rate OPTION` to submit your rating. Possible values for `OPTION` are: \n'
-                       f'`1` if you thought the first problem was **cooler**, \n'
-                       f'`2` if you thought the second problem was **cooler**, \n'
-                       f'`n` if you think they are the same quality, or \n'
-                       f'`d` if you have no preference (can\'t decide). ')
-
-        self.waiting_for[ctx.author.id] = ChoiceInformation(ctx.author, problem_1, problem_2, datetime.now(), 'COOL')
-
-    @commands.command(brief=f"Randomly do either rate_quality or rate_difficulty", aliases=['rr'])
-    async def rate_random(self, ctx):
-        choice = random.choice((self.rate_quality, self.rate_difficulty))
-        await choice(ctx)
+    @app_commands.command(description="Randomly do either rate_quality or rate_difficulty")
+    async def rate_random(self, interaction: discord.Interaction):
+        field, type_str, comparison, equality_noun = random.choice(
+            [
+                ('coolness_rating', 'COOL', 'cooler', 'quality'),
+                ('difficulty_rating', 'DIFF', 'harder', 'difficulty'),
+            ])
+        await self.start_rating(interaction, field, type_str, comparison, equality_noun)
 
 
 async def setup(bot: openpotd.OpenPOTD):

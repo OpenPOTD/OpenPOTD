@@ -1,16 +1,29 @@
 """A bunch of helper functions. """
 import re
 import sqlite3
-from datetime import date
+from datetime import date, datetime, timezone
 
 import dateparser
 import discord
-from discord.ext import commands
+from discord import app_commands
 import logging
 import io
 import openpotd
 
-date_regex = re.compile('\d\d\d\d-\d\d-\d\d')
+date_regex = re.compile(r'\d\d\d\d-\d\d-\d\d')
+
+
+def utc_now():
+    """Naive UTC timestamp, in the same format the database already stores. """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def not_blacklisted(interaction: discord.Interaction) -> bool:
+    return interaction.user.id not in interaction.client.blacklist
+
+
+async def is_owner(interaction: discord.Interaction) -> bool:
+    return await interaction.client.is_owner(interaction.user)
 
 
 def get_current_problem(conn: sqlite3.Connection):
@@ -25,18 +38,19 @@ def get_current_problem(conn: sqlite3.Connection):
         return POTD(result[0][0], conn)
 
 
-async def assign_solved_role(servers: list, user_id: int, give: bool, context: commands.Context):
+async def assign_solved_role(servers: list, user_id: int, give: bool, bot: openpotd.OpenPOTD):
     for server in servers:
-        guild: discord.Guild = context.bot.get_guild(server[0])
+        guild: discord.Guild = bot.get_guild(server[0])
         if guild is None:
-            continue
-
-        member: discord.Member = guild.get_member(user_id)
-        if member is None:
             continue
 
         solved_role: discord.Role = guild.get_role(server[1])
         if solved_role is None:
+            continue
+
+        try:
+            member: discord.Member = await guild.fetch_member(user_id)
+        except discord.NotFound:
             continue
 
         try:
@@ -46,6 +60,36 @@ async def assign_solved_role(servers: list, user_id: int, give: bool, context: c
                 await member.remove_roles(solved_role, reason=f'Did not solve POTD')
         except Exception as e:
             logging.warning(f'[ASSIGNING SOLVED ROLE] Guild {server[0]} failed. ')
+
+
+class POTDTransformer(app_commands.Transformer):
+    """Transforms a user's input (a problem ID or a date) into a POTD object. """
+
+    async def transform(self, interaction: discord.Interaction, value: str) -> 'POTD':
+        """Method tries to infer a user's input and parse it as a problem."""
+        db: sqlite3.Connection = interaction.client.db
+        cursor = db.cursor()
+
+        # Check if it's an ID
+        if value.isnumeric():
+            cursor.execute('SELECT EXISTS (SELECT 1 from problems where id = ?)', (int(value),))
+            if not cursor.fetchall()[0][0]:
+                raise app_commands.AppCommandError(f'No potd with such an ID (`{value}`)')
+            else:
+                return POTD(int(value), db)
+
+        # Check if it's an date
+        as_datetime = dateparser.parse(value)
+        if as_datetime is not None:
+            as_date = as_datetime.date()
+            cursor.execute('SELECT id from problems where date = ?', (as_date,))
+            result = cursor.fetchall()
+            if len(result) > 0:
+                return POTD(result[0][0], db)
+            else:
+                raise app_commands.AppCommandError(f'No potd with that date! (`{str(as_date)}`)')
+
+        raise app_commands.AppCommandError(f'Failed to parse {value} as a valid problem. ')
 
 
 class POTD:
@@ -81,36 +125,9 @@ class POTD:
             self.logger = logging.getLogger(f'POTD {self.id}')
             self.db = db
 
-    @classmethod
-    async def convert(cls, ctx: commands.Context, argument: str):
-        """Method tries to infer a user's input and parse it as a problem."""
-        db: sqlite3.Connection = ctx.bot.db
-        cursor = db.cursor()
-
-        # Check if it's an ID
-        if argument.isnumeric():
-            cursor.execute('SELECT EXISTS (SELECT 1 from problems where id = ?)', (int(argument),))
-            if not cursor.fetchall()[0][0]:
-                raise discord.ext.commands.UserInputError(f'No potd with such an ID (`{argument}`)')
-            else:
-                return cls(int(argument), db)
-
-        # Check if it's an date
-        as_datetime = dateparser.parse(argument)
-        if as_datetime is not None:
-            as_date = as_datetime.date()
-            cursor.execute('SELECT id from problems where date = ?', (as_date,))
-            result = cursor.fetchall()
-            if len(result) > 0:
-                return cls(result[0][0], db)
-            else:
-                raise discord.ext.commands.UserInputError(f'No potd with that date! (`{str(as_date)}`)')
-
-        raise commands.UserInputError(f'Failed to parse {argument} as a valid problem. ')
-
-    async def ensure_public(self, ctx: commands.Context):
+    async def ensure_public(self, interaction: discord.Interaction):
         if not self.public:
-            await ctx.send('This problem is not public!')
+            await interaction.response.send_message('This problem is not public!', ephemeral=True)
             return False
         return True
 
@@ -190,3 +207,7 @@ class POTD:
         embed.add_field(name='Solves (official)', value=official_solves)
         embed.add_field(name='Solves (unofficial)', value=unofficial_solves)
         return embed
+
+
+POTDArgument = app_commands.Transform[POTD, POTDTransformer]
+
