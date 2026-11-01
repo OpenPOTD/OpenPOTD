@@ -170,21 +170,19 @@ class Management(commands.Cog):
 
     @app_commands.command()
     @app_commands.check(authorised)
-    async def linkimg(self, interaction: discord.Interaction, problem: shared.POTDArgument):
+    @app_commands.describe(image='The image to attach to the problem. ')
+    async def linkimg(self, interaction: discord.Interaction, problem: shared.POTDArgument,
+                      image: discord.Attachment):
         potd = problem.id
-        if len(interaction.attachments) < 1:
-            await interaction.response.send_message("No attached file. ", ephemeral=True)
-            return
-        else:
-            save_path = io.BytesIO()
-            await interaction.attachments[0].save(save_path)
-            cursor = self.bot.db.cursor()
-            cursor.execute('''INSERT INTO images (potd_id, image) VALUES (?, ?)''',
-                           (potd, sqlite3.Binary(save_path.getbuffer())))
-            self.bot.db.commit()
-            save_path.close()
-            await interaction.response.send_message(f'Linked an image to {self.bot.config["otd_prefix"]}OTD {potd}. ',
-                                                    ephemeral=True)
+        save_path = io.BytesIO()
+        await image.save(save_path)
+        cursor = self.bot.db.cursor()
+        cursor.execute('''INSERT INTO images (potd_id, image) VALUES (?, ?)''',
+                       (potd, sqlite3.Binary(save_path.getbuffer())))
+        self.bot.db.commit()
+        save_path.close()
+        await interaction.response.send_message(f'Linked an image to {self.bot.config["otd_prefix"]}OTD {potd}. ',
+                                                ephemeral=True)
 
     @app_commands.command(description='Note: this is the admin version of the command so all problems are visible. ')
     @app_commands.check(authorised)
